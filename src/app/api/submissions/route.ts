@@ -7,7 +7,7 @@ import { deleteFile, uploadFile } from "@/lib/s3";
 
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = new Set(["application/pdf", "application/zip", "image/jpeg", "image/png"]);
+const ALLOWED_MIME_TYPES = new Set(["application/pdf", "application/zip", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);

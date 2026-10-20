@@ -1,32 +1,306 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ============================================
+// DESIGATOR - LMS / Task Management System
+// ============================================
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ============================================
+// ENUMY
+// ============================================
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  EVALUATOR
+  STUDENT
 }
 
-model Post {
+enum TaskStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  EVALUATED
+  RETURNED
+}
+
+enum EvaluationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SemesterType {
+  FULL_YEAR
+  SUMMER
+  WINTER
+}
+
+// ============================================
+// UŽIVATELÉ
+// ============================================
+
+model User {
+  id         String   @id @default(cuid())
+  legacyId   Int?     // staré MySQL user_id pro migraci
+  email      String   @unique
+  externalId String?  @unique // školní ID pro párování souborů
+  password   String   // hashované via bcrypt
+  name       String
+  role       UserRole @default(STUDENT)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Učitel/Hodnotitel: vytvořené tasky
+  createdTasks Task[] @relation("TaskCreator")
+
+  // Učitel: vytvořené předměty
+  createdSubjects Subject[] @relation("SubjectCreator")
+
+  // Hodnotitel: přiřazené evaluace
+  evaluations Evaluation[] @relation("EvaluatorUser")
+
+  // Student: odevzdání
+  submissions Submission[] @relation("StudentSubmissions")
+
+  // Třídy kde je studentem
+  classMemberships ClassStudent[]
+
+  // Třídy kde je učitelem
+  taughtClasses Class[] @relation("ClassTeacher")
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+// ============================================
+// TŘÍDY / SKUPINY
+// ============================================
+
+model Class {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  code        String   @unique // unikátní kód pro připojení
+  teacherId   String
+  teacher     User     @relation("ClassTeacher", fields: [teacherId], references: [id])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Studenti ve třídě
+  students ClassStudent[]
+
+  // Předměty v rámci třídy
+  subjects Subject[]
+
+  @@index([code])
+  @@index([teacherId])
+  @@map("classes")
+}
+
+model ClassStudent {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([classId, studentId])
+  @@index([classId])
+  @@index([studentId])
+  @@map("class_students")
+}
+
+// ============================================
+// PŘEDMĚTY
+// ============================================
+
+model Subject {
+  id          String       @id @default(cuid())
+  code        String       @default("") // zkratka předmětu (např. PRG, WEB, DBS)
+  name        String
+  description String?
+  semester    SemesterType @default(FULL_YEAR)
+  year        Int          // např. 2025
+  classId     String
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacherId   String       // učitel předmětu
+  teacher     User         @relation("SubjectCreator", fields: [teacherId], references: [id])
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Tasky v rámci předmětu
+  tasks Task[]
+
+  @@index([classId])
+  @@index([teacherId])
+  @@index([year])
+  @@index([semester])
+  @@map("subjects")
+}
+
+// ============================================
+// TASKY / ZADÁNÍ
+// ============================================
+
+model Task {
+  id          String     @id @default(cuid())
+  legacyId    Int?       // staré MySQL task_id pro migraci
+  title       String
+  description String?    @db.Text
+  instructions String?   @db.Text
+  maxPoints   Int        @default(100)
+  deadline    DateTime?
+  status      TaskStatus @default(DRAFT)
+  creatorId   String
+  creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
+  subjectId   String
+  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  isTemplate  Boolean    @default(false) // pro duplikaci
+  templateId  String?    // odkaz na původní task při duplikaci
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Přílohy k zadání
+  attachments Attachment[] @relation("TaskAttachments")
+
+  // Odevzdání
+  submissions Submission[]
+
+  // Kritéria hodnocení
+  criteria EvaluationCriterion[]
+
+  @@index([creatorId])
+  @@index([subjectId])
+  @@index([status])
+  @@index([isTemplate])
+  @@map("tasks")
+}
+
+// ============================================
+// KRITÉRIA HODNOCENÍ
+// ============================================
+
+model EvaluationCriterion {
+  id          String @id @default(cuid())
+  taskId      String
+  task        Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  maxPoints   Int
+  order       Int    @default(0)
+
+  // Konkrétní hodnocení tohoto kritéria
+  scores CriterionScore[]
+
+  @@index([taskId])
+  @@map("evaluation_criteria")
+}
+
+// ============================================
+// ODEVZDÁNÍ
+// ============================================
+
+model Submission {
+  id          String           @id @default(cuid())
+  taskId      String
+  task        Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User             @relation("StudentSubmissions", fields: [studentId], references: [id])
+  content     String?          @db.Text // textové odevzdání
+  status      SubmissionStatus @default(SUBMITTED)
+  submittedAt DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Přílohy odevzdání
+  attachments Attachment[] @relation("SubmissionAttachments")
+
+  // Hodnocení
+  evaluations Evaluation[]
+
+  @@unique([taskId, studentId])
+  @@index([taskId])
+  @@index([studentId])
+  @@index([status])
+  @@map("submissions")
+}
+
+// ============================================
+// HODNOCENÍ
+// ============================================
+
+model Evaluation {
+  id          String           @id @default(cuid())
+  submissionId String
+  submission  Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  evaluatorId String
+  evaluator   User             @relation("EvaluatorUser", fields: [evaluatorId], references: [id])
+  totalPoints Int?
+  feedback    String?          @db.Text
+  status      EvaluationStatus @default(PENDING)
+  evaluatedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Skóre jednotlivých kritérií
+  scores CriterionScore[]
+
+  @@unique([submissionId, evaluatorId])
+  @@index([submissionId])
+  @@index([evaluatorId])
+  @@index([status])
+  @@map("evaluations")
+}
+
+model CriterionScore {
+  id          String  @id @default(cuid())
+  evaluationId String
+  evaluation  Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  criterionId String
+  criterion   EvaluationCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  points      Int
+  comment     String?
+
+  @@unique([evaluationId, criterionId])
+  @@map("criterion_scores")
+}
+
+// ============================================
+// PŘÍLOHY (S3)
+// ============================================
+
+model Attachment {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int
+  s3Key       String   @unique
+  s3Url       String
+  taskId      String?
+  task        Task?    @relation("TaskAttachments", fields: [taskId], references: [id], onDelete: SetNull)
+  submissionId String?
+  submission  Submission? @relation("SubmissionAttachments", fields: [submissionId], references: [id], onDelete: SetNull)
+  uploadedAt  DateTime @default(now())
+
+  @@index([taskId])
+  @@index([submissionId])
+  @@map("attachments")
 }

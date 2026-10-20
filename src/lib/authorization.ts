@@ -55,7 +55,8 @@ export async function canReadAttachment(user: AuthUser, attachmentId: string): P
       id: attachmentId,
       OR: [
         { task: { creatorId: user.id } },
-        { task: { subject: { class: { students: { some: { studentId: user.id } } } } } },
+        { task: { status: { in: ["PUBLISHED", "CLOSED"] }, subject: { class: { students: { some: { studentId: user.id } } } } } },
+        { task: { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } } },
         { submission: { studentId: user.id } },
         { submission: { task: { creatorId: user.id } } },
         { submission: { evaluations: { some: { evaluatorId: user.id } } } },
@@ -73,7 +74,7 @@ export async function canViewTask(user: AuthUser, taskId: string): Promise<boole
       id: taskId,
       OR: [
         { creatorId: user.id },
-        { subject: { class: { students: { some: { studentId: user.id } } } }, status: "PUBLISHED" },
+        { subject: { class: { students: { some: { studentId: user.id } } } }, status: { in: ["PUBLISHED", "CLOSED"] } },
         { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } },
       ],
     },

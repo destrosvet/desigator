@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { evaluationQuerySchema, listEvaluations } from "@/lib/evaluations";
 
 const assignmentSchema = z.object({
   submissionId: z.string().min(1),
@@ -12,54 +13,15 @@ const assignmentSchema = z.object({
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+  const params = Object.fromEntries(new URL(req.url).searchParams.entries());
+  const parsed = evaluationQuerySchema.safeParse(params);
+  if (!parsed.success) return NextResponse.json({ error: "Invalid evaluation filters" }, { status: 400 });
   try {
-    const { searchParams } = new URL(req.url);
-    const taskId = searchParams.get("taskId");
-    const studentId = searchParams.get("studentId");
-    const status = searchParams.get("status");
-    const search = searchParams.get("search");
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20")));
-
-    const where: any = session.user.role === "ADMIN"
-      ? {}
-      : session.user.role === "TEACHER"
-        ? { submission: { task: { creatorId: session.user.id } } }
-        : session.user.role === "EVALUATOR"
-          ? { evaluatorId: session.user.id }
-          : { submission: { studentId: session.user.id } };
-
-    if (taskId) where.submission = { ...(where.submission || {}), taskId };
-    if (studentId) where.submission = { ...(where.submission || {}), studentId };
-    if (status) where.status = status;
-    if (search) where.feedback = { contains: search, mode: "insensitive" };
-
-    const [evaluations, total] = await Promise.all([
-      db.evaluation.findMany({
-        where,
-        include: {
-          evaluator: { select: { id: true, name: true } },
-          submission: {
-            include: {
-              student: { select: { id: true, name: true } },
-              task: { select: { id: true, title: true, maxPoints: true } },
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      db.evaluation.count({ where }),
-    ]);
-
-    return NextResponse.json({ evaluations, total, page, limit });
+    return NextResponse.json(await listEvaluations(session.user, parsed.data));
   } catch {
     return NextResponse.json({ error: "Failed to fetch evaluations" }, { status: 500 });
   }
 }
-
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session || !["ADMIN", "TEACHER"].includes(session.user.role)) {

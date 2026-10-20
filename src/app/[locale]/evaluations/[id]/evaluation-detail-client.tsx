@@ -1,102 +1,85 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
+import { ArrowLeft, ArrowRight, Check, Grid2X2, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { WorkViewer } from "@/components/work-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Paperclip } from "lucide-react";
+import { useReviewWorkspace } from "@/hooks/use-review-workspace";
+import type { ReviewQueueItem, ReviewWork } from "@/lib/review-workspace";
 
-type EvaluationDetail = {
-  id: string;
-  status: string;
-  totalPoints: number | null;
-  feedback: string | null;
-  evaluator: { name: string };
-  scores: Array<{ criterionId: string; points: number; comment: string | null }>;
-  submission: {
-    content: string | null;
-    student: { name: string; email: string };
-    attachments: Array<{ id: string; originalName: string; s3Url: string }>;
-    task: {
-      title: string;
-      maxPoints: number;
-      criteria: Array<{ id: string; name: string; description: string | null; maxPoints: number }>;
-    };
-  };
-};
+const statusLabels: Record<string, string> = { PENDING: "Nehodnoceno", IN_PROGRESS: "Rozpracováno", COMPLETED: "Dokončeno" };
 
-export function EvaluationDetailClient({ evaluation, role }: { evaluation: EvaluationDetail; role: string }) {
-  const router = useRouter();
+export function EvaluationDetailClient({ evaluation, queue: initialQueue, role }: { evaluation: ReviewWork; queue: ReviewQueueItem[]; role: string }) {
+  const locale = useLocale();
   const canEdit = role !== "STUDENT";
-  const initialScores = new Map(evaluation.scores.map((score) => [score.criterionId, score]));
-  const [feedback, setFeedback] = useState(evaluation.feedback || "");
-  const [scores, setScores] = useState<Record<string, { points: number; comment: string }>>(
-    Object.fromEntries(evaluation.submission.task.criteria.map((criterion) => [
-      criterion.id,
-      { points: initialScores.get(criterion.id)?.points || 0, comment: initialScores.get(criterion.id)?.comment || "" },
-    ]))
-  );
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const total = Object.values(scores).reduce((sum, score) => sum + score.points, 0);
+  const review = useReviewWorkspace(evaluation, initialQueue, locale, canEdit);
+  const { work, form, queue, saving, navigating, error, message, change, goTo, persist, leave, fullyRated } = review;
+  const { task, student, attachments, content } = work.submission;
+  const index = queue.findIndex((item) => item.id === work.id);
+  const previous = queue[index - 1];
+  const next = queue[index + 1];
+  const total = form.touched.reduce((sum, id) => sum + (form.scores[id]?.points || 0), 0);
+  const gridHref = `/${locale}/evaluations?taskId=${task.id}`;
+  const invalid = total > task.maxPoints || form.touched.some((id) => !Number.isInteger(form.scores[id].points));
 
-  async function save(status: "IN_PROGRESS" | "COMPLETED") {
-    setBusy(true);
-    setMessage("");
-    const response = await fetch(`/api/evaluations/${evaluation.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        feedback,
-        status,
-        scores: Object.entries(scores).map(([criterionId, score]) => ({ criterionId, points: score.points, comment: score.comment || null })),
-      }),
-    });
-    const result = await response.json();
-    setBusy(false);
-    setMessage(response.ok ? "Hodnocení bylo uloženo." : result.error || "Uložení selhalo.");
-    if (response.ok) router.refresh();
+  function setScore(id: string, value: string | number) {
+    if (typeof value === "string" && value === "") {
+      change((draft) => ({ ...draft, touched: draft.touched.filter((key) => key !== id), scores: { ...draft.scores, [id]: { ...draft.scores[id], points: 0 } } }));
+      return;
+    }
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    change((draft) => ({ ...draft, touched: [...new Set([...draft.touched, id])], scores: { ...draft.scores, [id]: { ...draft.scores[id], points: Math.min(draft.limits[id], Math.max(0, numeric)) } } }));
   }
 
-  return (
-    <AppShell>
-      <div className="space-y-6">
-        <div>
-          <div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{evaluation.submission.task.title}</h1><Badge>{evaluation.status}</Badge></div>
-          <p className="text-muted-foreground">{evaluation.submission.student.name} · {evaluation.submission.student.email}</p>
-        </div>
+  function markCriterion(id: string) {
+    if (!form.touched.includes(id)) setScore(id, form.scores[id]?.points || 0);
+  }
 
-        <Card>
-          <CardHeader><CardTitle>Odevzdaná práce</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {evaluation.submission.content ? <p className="whitespace-pre-wrap">{evaluation.submission.content}</p> : <p className="text-muted-foreground">Bez textového obsahu.</p>}
-            {evaluation.submission.attachments.map((attachment) => <a key={attachment.id} href={attachment.s3Url} className="flex items-center gap-2 underline"><Paperclip className="size-4" />{attachment.originalName}</a>)}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Bodování</CardTitle></CardHeader>
-          <CardContent className="space-y-5">
-            {evaluation.submission.task.criteria.map((criterion) => (
-              <fieldset key={criterion.id} className="space-y-2 rounded-lg border p-4" disabled={!canEdit}>
-                <div className="flex items-center justify-between"><Label htmlFor={`points-${criterion.id}`}>{criterion.name}</Label><span className="text-sm">max. {criterion.maxPoints}</span></div>
-                {criterion.description ? <p className="text-sm text-muted-foreground">{criterion.description}</p> : null}
-                <Input id={`points-${criterion.id}`} type="number" min={0} max={criterion.maxPoints} value={scores[criterion.id]?.points || 0} onChange={(event) => setScores((current) => ({ ...current, [criterion.id]: { ...current[criterion.id], points: Math.min(criterion.maxPoints, Math.max(0, Number(event.target.value))) } }))} />
-                <Textarea aria-label={`Komentář ke kritériu ${criterion.name}`} placeholder="Komentář" value={scores[criterion.id]?.comment || ""} onChange={(event) => setScores((current) => ({ ...current, [criterion.id]: { ...current[criterion.id], comment: event.target.value } }))} />
-              </fieldset>
-            ))}
-            <p className="text-xl font-semibold">Celkem: {canEdit ? total : evaluation.totalPoints ?? 0} / {evaluation.submission.task.maxPoints}</p>
-            <div className="space-y-2"><Label htmlFor="feedback">Celková zpětná vazba</Label><Textarea id="feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} disabled={!canEdit} rows={6} /></div>
-            {canEdit ? <div className="flex gap-2"><Button variant="outline" onClick={() => save("IN_PROGRESS")} disabled={busy}>Uložit koncept</Button><Button onClick={() => save("COMPLETED")} disabled={busy}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Dokončit hodnocení</Button></div> : null}
-            {message ? <p role="status" className="text-sm">{message}</p> : null}
-          </CardContent>
-        </Card>
+  return <AppShell compact><div className="mx-auto max-w-[1600px] space-y-3">
+    <header className="flex flex-wrap items-center gap-3 pl-11 lg:pl-0">
+      <Button variant="outline" size="sm" onClick={() => void leave(gridHref)} disabled={navigating}><Grid2X2 className="mr-1.5 size-4" />Grid</Button>
+      <div className="min-w-0 flex-1"><h1 className="truncate text-xl font-bold" data-testid="current-student">{student.name}</h1><p className="truncate text-xs text-muted-foreground" title={task.title}>{task.title}</p></div>
+      <Badge variant={form.status === "COMPLETED" ? "default" : "secondary"} className="hidden sm:inline-flex">{statusLabels[form.status]}</Badge>
+      <div className="flex items-center gap-1" aria-label="Přepínání studentů">
+        <Button variant="outline" size="icon" aria-label="Předchozí student" title="Předchozí student (←)" onClick={() => previous && void goTo(previous.id)} disabled={!previous || navigating}><ArrowLeft className="size-4" /></Button>
+        <span className="min-w-16 text-center text-sm tabular-nums" aria-label="Pořadí práce">{index + 1} / {queue.length}</span>
+        <Button variant="outline" size="icon" aria-label="Další student" title="Další student (→). Vyplněné hodnocení se uloží a dokončí." onClick={() => next && void goTo(next.id)} disabled={!next || navigating}>{navigating ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}</Button>
       </div>
-    </AppShell>
-  );
+    </header>
+
+    <section aria-label="Prohlížení studentské práce" className={navigating ? "pointer-events-none opacity-60" : ""}>
+      <WorkViewer key={work.id} attachments={attachments} compact />
+    </section>
+
+    <section aria-label="Hodnocení práce" className="rounded-xl border bg-card px-4 py-3">
+      {!task.criteria.length ? <p role="alert" className="text-sm">Zadání nemá hodnoticí kritéria. Před hodnocením je musí doplnit učitel.</p> : null}
+      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
+        {task.criteria.map((criterion) => <fieldset key={criterion.id} className="min-w-0 space-y-1" disabled={!canEdit || navigating}>
+          <div className="flex items-center justify-between gap-2"><Label htmlFor={`points-${criterion.id}`} title={criterion.description || undefined} className="truncate text-xs font-medium">{criterion.name}</Label><div className="flex items-center gap-1"><Input id={`points-${criterion.id}`} type="number" min={0} max={criterion.maxPoints} step={1} value={form.touched.includes(criterion.id) ? form.scores[criterion.id]?.points ?? 0 : ""} placeholder="—" onChange={(event) => setScore(criterion.id, event.target.value)} className="h-7 w-16 px-2 text-right text-sm tabular-nums" /><span className="text-xs text-muted-foreground">/ {criterion.maxPoints}</span></div></div>
+          <Slider aria-label={`${criterion.name} – posuvník`} value={[form.scores[criterion.id]?.points ?? 0]} min={0} max={criterion.maxPoints} step={1} disabled={!canEdit || navigating} onPointerDown={() => markCriterion(criterion.id)} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) markCriterion(criterion.id); }} onValueChange={([points]) => setScore(criterion.id, points)} onValueCommit={() => void persist("draft")} className={`min-h-8 ${form.touched.includes(criterion.id) ? "" : "opacity-50"}`} />
+        </fieldset>)}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1"><p className="text-sm font-semibold tabular-nums">Celkem {total} / {task.maxPoints} b.</p><p role="status" aria-live="polite" className="text-xs text-muted-foreground">{saving ? "Ukládání…" : form.revision !== form.savedRevision ? "Čeká na uložení…" : message || `${form.touched.length} / ${task.criteria.length} kritérií · hotovo ${queue.filter((item) => item.status === "COMPLETED").length} / ${queue.length} prací`}</p></div>
+        {canEdit ? <Button size="sm" onClick={() => next ? void goTo(next.id) : void persist("complete")} disabled={navigating || invalid || !fullyRated}>{navigating || saving ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Check className="mr-1.5 size-4" />}{next ? "Dokončit a další" : "Dokončit hodnocení"}</Button> : null}
+      </div>
+      {invalid ? <p role="alert" className="mt-2 text-sm text-destructive">Zkontrolujte celé body a celkový limit zadání.</p> : null}
+      {error ? <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 text-sm text-destructive"><p>{error} Přechod na jinou práci byl zastaven.</p><Button variant="outline" size="sm" onClick={() => void persist("draft")}>Zkusit uložit znovu</Button></div> : null}
+    </section>
+
+    <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground"><p>← → další student · hodnoty se průběžně ukládají · při přechodu se vyplněné hodnocení dokončí</p><span>Hodnotí {work.evaluator.name}</span></div>
+    <details className="rounded-lg border px-3 py-2"><summary className="cursor-pointer text-sm font-medium">Komentáře a zpětná vazba <span className="font-normal text-muted-foreground">(volitelné)</span></summary><div className="mt-3 grid gap-4 md:grid-cols-2">
+      <div className="space-y-2"><Label htmlFor="feedback">Celková zpětná vazba</Label><Textarea id="feedback" value={form.feedback} maxLength={10000} onChange={(event) => change((draft) => ({ ...draft, feedback: event.target.value }))} disabled={!canEdit || navigating} rows={4} placeholder="Silné stránky a doporučení…" /></div>
+      <div className="space-y-3">{task.criteria.map((criterion) => <div key={criterion.id} className="space-y-1"><Label htmlFor={`comment-${criterion.id}`} className="text-xs">Komentář ke kritériu {criterion.name}</Label><Textarea id={`comment-${criterion.id}`} maxLength={2000} value={form.scores[criterion.id]?.comment || ""} disabled={!canEdit || navigating || !form.touched.includes(criterion.id)} placeholder={form.touched.includes(criterion.id) ? "Volitelný komentář…" : "Nejprve nastavte body."} onChange={(event) => change((draft) => ({ ...draft, scores: { ...draft.scores, [criterion.id]: { ...draft.scores[criterion.id], comment: event.target.value } } }))} rows={2} /></div>)}</div>
+      {canEdit ? <Button variant="outline" size="sm" className="w-fit" onClick={() => void persist("draft")} disabled={navigating || saving || invalid}>Uložit koncept</Button> : null}
+    </div></details>
+    <details className="rounded-lg border px-3 py-2"><summary className="cursor-pointer text-sm font-medium">Zadání a pokyny</summary><div className="mt-3 space-y-3 whitespace-pre-wrap text-sm text-muted-foreground">{task.description ? <p>{task.description}</p> : null}{task.instructions ? <p>{task.instructions}</p> : null}{content ? <div><p className="mb-1 font-medium text-foreground">Poznámka studenta</p><p>{content}</p></div> : null}</div></details>
+  </div></AppShell>;
 }

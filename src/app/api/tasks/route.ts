@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     } else if (session.user.role === "TEACHER") {
       where.creatorId = session.user.id;
     } else if (session.user.role === "EVALUATOR") {
-      where.status = "PUBLISHED";
+      where.submissions = { some: { evaluations: { some: { evaluatorId: session.user.id } } } };
     } else {
       // STUDENT – tasky z předmětů jeho tříd
       const classIds = await db.classStudent.findMany({

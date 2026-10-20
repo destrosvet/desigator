@@ -31,11 +31,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       criteria: { orderBy: { order: "asc" } },
       attachments: { select: { id: true, originalName: true, mimeType: true, size: true, s3Url: true } },
       submissions: {
-        where: isStudent ? { studentId: session.user.id } : undefined,
+        where: isStudent ? { studentId: session.user.id }
+          : session.user.role === "EVALUATOR" ? { evaluations: { some: { evaluatorId: session.user.id } } } : undefined,
         include: {
           student: { select: { id: true, name: true, email: true } },
           attachments: { select: { id: true, originalName: true, mimeType: true, size: true, s3Url: true } },
           evaluations: {
+            where: session.user.role === "EVALUATOR" ? { evaluatorId: session.user.id } : isStudent ? { status: "COMPLETED" } : undefined,
             include: {
               evaluator: { select: { id: true, name: true } },
               scores: true,

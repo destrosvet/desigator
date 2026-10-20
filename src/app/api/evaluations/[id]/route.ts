@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { canManageEvaluation } from "@/lib/authorization";
 import { db } from "@/lib/db";
+import { evaluationScope } from "@/lib/evaluations";
 
 const evaluationSchema = z.object({
   feedback: z.string().max(10000).nullable().optional(),
@@ -20,11 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const where = session.user.role === "ADMIN"
-    ? { id }
-    : session.user.role === "STUDENT"
-      ? { id, submission: { studentId: session.user.id } }
-      : { id, OR: [{ evaluatorId: session.user.id }, { submission: { task: { creatorId: session.user.id } } }] };
+  const where = { AND: [{ id }, evaluationScope(session.user)] };
 
   const evaluation = await db.evaluation.findFirst({
     where,
@@ -34,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       submission: {
         include: {
           student: { select: { id: true, name: true, email: true } },
-          attachments: { select: { id: true, originalName: true, size: true, s3Url: true } },
+          attachments: { select: { id: true, originalName: true, mimeType: true, size: true, s3Url: true } },
           task: { include: { criteria: { orderBy: { order: "asc" } } } },
         },
       },
@@ -57,7 +54,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const input = evaluationSchema.parse(await req.json());
     const evaluation = await db.evaluation.findUnique({
       where: { id },
-      include: { submission: { select: { taskId: true } } },
+      include: { submission: { select: { taskId: true, task: { select: { maxPoints: true } } } } },
     });
     if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
 
@@ -66,11 +63,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       select: { id: true, maxPoints: true },
     });
     const limits = new Map(criteria.map((criterion) => [criterion.id, criterion.maxPoints]));
+    const uniqueIds = new Set(input.scores.map((score) => score.criterionId));
+    if (uniqueIds.size !== input.scores.length || (input.status === "COMPLETED" && (criteria.length === 0 || uniqueIds.size !== criteria.length))) {
+      return NextResponse.json({ error: "Vyplňte každé kritérium právě jednou." }, { status: 400 });
+    }
     if (input.scores.some((score) => !limits.has(score.criterionId) || score.points > limits.get(score.criterionId)!)) {
       return NextResponse.json({ error: "Invalid criterion score" }, { status: 400 });
     }
 
     const totalPoints = input.scores.reduce((sum, score) => sum + score.points, 0);
+    if (totalPoints > evaluation.submission.task.maxPoints) return NextResponse.json({ error: "Součet bodů přesahuje maximum zadání." }, { status: 400 });
     const updated = await db.$transaction(async (tx) => {
       await tx.criterionScore.deleteMany({ where: { evaluationId: id } });
       if (input.scores.length) {
@@ -87,9 +89,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           evaluatedAt: input.status === "COMPLETED" ? new Date() : null,
         },
       });
+      const remaining = await tx.evaluation.count({ where: { submissionId: evaluation.submissionId, status: { not: "COMPLETED" } } });
       await tx.submission.update({
         where: { id: evaluation.submissionId },
-        data: { status: input.status === "COMPLETED" ? "EVALUATED" : "UNDER_REVIEW" },
+        data: { status: remaining === 0 ? "EVALUATED" : "UNDER_REVIEW" },
       });
       return saved;
     });

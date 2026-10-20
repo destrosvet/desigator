@@ -18,7 +18,8 @@ async function getSignedHeaders(
   path: string,
   payload: string | ArrayBuffer,
   timestamp: string,
-  dateStamp: string
+  dateStamp: string,
+  host: string
 ): Promise<Record<string, string>> {
   const { accessKeyId, secretAccessKey, region } = S3_CONFIG;
 
@@ -27,7 +28,7 @@ async function getSignedHeaders(
     method.toUpperCase(),
     path,
     "",
-    `host:${new URL(S3_CONFIG.endpoint).host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${timestamp}\n`,
+    `host:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${timestamp}\n`,
     "host;x-amz-content-sha256;x-amz-date",
     payloadHash,
   ].join("\n");
@@ -45,7 +46,8 @@ async function getSignedHeaders(
   const kRegion = await hmacSha256(kDate, region);
   const kService = await hmacSha256(kRegion, "s3");
   const kSigning = await hmacSha256(kService, "aws4_request");
-  const signature = await hmacSha256(kSigning, stringToSign);
+  const signatureBytes = await hmacSha256(kSigning, stringToSign);
+  const signature = Array.from(new Uint8Array(signatureBytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
   const authorization =
     `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope},` +
@@ -56,7 +58,7 @@ async function getSignedHeaders(
     Authorization: authorization,
     "x-amz-date": timestamp,
     "x-amz-content-sha256": payloadHash,
-    Host: new URL(S3_CONFIG.endpoint).host,
+    Host: host,
   };
 }
 
@@ -73,7 +75,7 @@ async function asyncSha256(data: string | ArrayBuffer): Promise<string> {
 async function hmacSha256(
   key: string | ArrayBuffer,
   data: string
-): Promise<string> {
+): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const keyData = typeof key === "string" ? encoder.encode(key) : key;
   const cryptoKey = await crypto.subtle.importKey(
@@ -89,9 +91,19 @@ async function hmacSha256(
     cryptoKey,
     encoder.encode(data)
   );
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return signature;
+}
+
+function objectLocation(key: string) {
+  const url = new URL(S3_CONFIG.endpoint);
+  const encoded = key.split("/").map((segment) => encodeURIComponent(segment).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)).join("/");
+  const prefix = url.pathname.replace(/\/$/, "");
+  if (S3_CONFIG.forcePathStyle) url.pathname = `${prefix}/${encodeURIComponent(S3_CONFIG.bucket)}/${encoded}`;
+  else {
+    url.hostname = `${S3_CONFIG.bucket}.${url.hostname}`;
+    url.pathname = `${prefix}/${encoded}`;
+  }
+  return { url: url.toString(), path: url.pathname, host: url.host };
 }
 
 /**
@@ -101,11 +113,7 @@ export function getPublicUrl(key: string): string {
   if (S3_CONFIG.publicUrl) {
     return `${S3_CONFIG.publicUrl}/${key}`;
   }
-  const base = S3_CONFIG.endpoint.replace(/\/$/, "");
-  if (S3_CONFIG.forcePathStyle) {
-    return `${base}/${S3_CONFIG.bucket}/${key}`;
-  }
-  return `${base}/${key}`;
+  return objectLocation(key).url;
 }
 
 /**
@@ -116,14 +124,10 @@ export async function uploadFile(
   file: Buffer | Uint8Array | ArrayBuffer,
   contentType: string = "application/octet-stream"
 ): Promise<{ url: string; key: string }> {
-  const base = S3_CONFIG.endpoint.replace(/\/$/, "");
-  const path = S3_CONFIG.forcePathStyle
-    ? `/${S3_CONFIG.bucket}/${key}`
-    : `/${key}`;
-  const url = `${base}${path}`;
+  const { url, path, host } = objectLocation(key);
 
   const now = new Date();
-  const timestamp = now.toISOString().replace(/[:\-]|\..+/g, "");
+  const timestamp = now.toISOString().replace(/[:\-]|\.\d{3}/g, "");
   const dateStamp = timestamp.slice(0, 8);
 
   const body =
@@ -134,7 +138,7 @@ export async function uploadFile(
       : Buffer.from(file);
 
   const requestBody = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer;
-  const headers = await getSignedHeaders("PUT", path, requestBody, timestamp, dateStamp);
+  const headers = await getSignedHeaders("PUT", path, requestBody, timestamp, dateStamp, host);
 
   const response = await fetch(url, {
     method: "PUT",
@@ -158,17 +162,13 @@ export async function uploadFile(
  * Smaže soubor z S3/MinIO
  */
 export async function deleteFile(key: string): Promise<void> {
-  const base = S3_CONFIG.endpoint.replace(/\/$/, "");
-  const path = S3_CONFIG.forcePathStyle
-    ? `/${S3_CONFIG.bucket}/${key}`
-    : `/${key}`;
-  const url = `${base}${path}`;
+  const { url, path, host } = objectLocation(key);
 
   const now = new Date();
-  const timestamp = now.toISOString().replace(/[:\-]|\..+/g, "");
+  const timestamp = now.toISOString().replace(/[:\-]|\.\d{3}/g, "");
   const dateStamp = timestamp.slice(0, 8);
 
-  const headers = await getSignedHeaders("DELETE", path, "", timestamp, dateStamp);
+  const headers = await getSignedHeaders("DELETE", path, "", timestamp, dateStamp, host);
 
   const response = await fetch(url, {
     method: "DELETE",
@@ -185,17 +185,13 @@ export async function deleteFile(key: string): Promise<void> {
  * Získá soubor z S3/MinIO
  */
 export async function getFile(key: string): Promise<Buffer> {
-  const base = S3_CONFIG.endpoint.replace(/\/$/, "");
-  const path = S3_CONFIG.forcePathStyle
-    ? `/${S3_CONFIG.bucket}/${key}`
-    : `/${key}`;
-  const url = `${base}${path}`;
+  const { url, path, host } = objectLocation(key);
 
   const now = new Date();
-  const timestamp = now.toISOString().replace(/[:\-]|\..+/g, "");
+  const timestamp = now.toISOString().replace(/[:\-]|\.\d{3}/g, "");
   const dateStamp = timestamp.slice(0, 8);
 
-  const headers = await getSignedHeaders("GET", path, "", timestamp, dateStamp);
+  const headers = await getSignedHeaders("GET", path, "", timestamp, dateStamp, host);
 
   const response = await fetch(url, {
     method: "GET",

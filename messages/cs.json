@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "title": "Desigator - Systém pro hodnocení",
+    "description": "Platforma pro správu zadání, studentů a hodnocení"
+  },
+  "navigation": {
+    "dashboard": "Nástěnka",
+    "classes": "Třídy",
+    "subjects": "Předměty",
+    "tasks": "Zadání",
+    "students": "Studenti",
+    "evaluations": "Hodnocení",
+    "settings": "Nastavení",
+    "logout": "Odhlásit se",
+    "login": "Přihlášení",
+    "register": "Registrace"
+  },
+  "auth": {
+    "login": {
+      "title": "Přihlášení",
+      "email": "E-mail",
+      "password": "Heslo",
+      "submit": "Přihlásit se",
+      "noAccount": "Nemáte účet?",
+      "register": "Zaregistrujte se",
+      "error": "Neplatné přihlašovací údaje"
+    },
+    "register": {
+      "title": "Registrace",
+      "name": "Jméno a příjmení",
+      "email": "E-mail",
+      "password": "Heslo",
+      "submit": "Registrovat se",
+      "hasAccount": "Již máte účet?",
+      "login": "Přihlaste se",
+      "success": "Registrace proběhla úspěšně"
+    }
+  },
+  "roles": {
+    "ADMIN": "Administrátor",
+    "TEACHER": "Učitel",
+    "EVALUATOR": "Hodnotitel",
+    "STUDENT": "Student"
+  },
+  "common": {
+    "save": "Uložit",
+    "cancel": "Zrušit",
+    "delete": "Smazat",
+    "edit": "Upravit",
+    "create": "Vytvořit",
+    "duplicate": "Duplikovat",
+    "search": "Hledat",
+    "filter": "Filtrovat",
+    "actions": "Akce",
+    "loading": "Načítání...",
+    "noResults": "Žádné výsledky",
+    "confirmDelete": "Opravdu chcete smazat tuto položku?",
+    "success": "Operace proběhla úspěšně",
+    "error": "Nastala chyba"
+  },
+  "dashboard": {
+    "title": "Nástěnka",
+    "welcome": "Vítejte, {name}",
+    "stats": {
+      "totalStudents": "Celkem studentů",
+      "totalTasks": "Celkem zadání",
+      "pendingEvaluations": "Čekající hodnocení",
+      "totalClasses": "Celkem tříd"
+    }
+  },
+  "students": {
+    "title": "Studenti",
+    "addSingle": "Přidat studenta",
+    "addBulk": "Hromadné přidání",
+    "bulkDescription": "Vložte e-maily studentů (jeden na řádek) nebo nahrajte CSV",
+    "bulkPlaceholder": "student1@email.cz\nstudent2@email.cz",
+    "bulkSubmit": "Přidat studenty",
+    "bulkSuccess": "{count} studentů bylo přidáno",
+    "name": "Jméno",
+    "email": "E-mail",
+    "class": "Třída",
+    "joined": "Připojen"
+  },
+  "tasks": {
+    "title": "Zadání",
+    "create": "Nové zadání",
+    "duplicate": "Duplikovat zadání",
+    "duplicateSuccess": "Zadání bylo úspěšně duplikováno",
+    "titleLabel": "Název",
+    "description": "Popis",
+    "instructions": "Instrukce",
+    "maxPoints": "Maximální bodů",
+    "deadline": "Termín odevzdání",
+    "status": "Stav",
+    "criteria": "Kritéria hodnocení",
+    "addCriterion": "Přidat kritérium",
+    "attachments": "Přílohy"
+  },
+  "classes": {
+    "title": "Třídy",
+    "create": "Nová třída",
+    "name": "Název třídy",
+    "code": "Kód pro připojení",
+    "description": "Popis",
+    "students": "Studenti",
+    "teacher": "Učitel"
+  }
+}

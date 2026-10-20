@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "title": "Desigator - Evaluation System",
+    "description": "Platform for task management, students and evaluations"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "classes": "Classes",
+    "subjects": "Subjects",
+    "tasks": "Tasks",
+    "students": "Students",
+    "evaluations": "Evaluations",
+    "settings": "Settings",
+    "logout": "Logout",
+    "login": "Login",
+    "register": "Register"
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "noAccount": "Don't have an account?",
+      "register": "Register",
+      "error": "Invalid credentials"
+    },
+    "register": {
+      "title": "Register",
+      "name": "Full name",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Create account",
+      "hasAccount": "Already have an account?",
+      "login": "Sign in",
+      "success": "Registration successful"
+    }
+  },
+  "roles": {
+    "ADMIN": "Administrator",
+    "TEACHER": "Teacher",
+    "EVALUATOR": "Evaluator",
+    "STUDENT": "Student"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "duplicate": "Duplicate",
+    "search": "Search",
+    "filter": "Filter",
+    "actions": "Actions",
+    "loading": "Loading...",
+    "noResults": "No results",
+    "confirmDelete": "Are you sure you want to delete this item?",
+    "success": "Operation successful",
+    "error": "An error occurred"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {name}",
+    "stats": {
+      "totalStudents": "Total students",
+      "totalTasks": "Total tasks",
+      "pendingEvaluations": "Pending evaluations",
+      "totalClasses": "Total classes"
+    }
+  },
+  "students": {
+    "title": "Students",
+    "addSingle": "Add student",
+    "addBulk": "Bulk add",
+    "bulkDescription": "Paste student emails (one per line) or upload CSV",
+    "bulkPlaceholder": "student1@email.com\nstudent2@email.com",
+    "bulkSubmit": "Add students",
+    "bulkSuccess": "{count} students added",
+    "name": "Name",
+    "email": "Email",
+    "class": "Class",
+    "joined": "Joined"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "create": "New task",
+    "duplicate": "Duplicate task",
+    "duplicateSuccess": "Task duplicated successfully",
+    "titleLabel": "Title",
+    "description": "Description",
+    "instructions": "Instructions",
+    "maxPoints": "Maximum points",
+    "deadline": "Deadline",
+    "status": "Status",
+    "criteria": "Evaluation criteria",
+    "addCriterion": "Add criterion",
+    "attachments": "Attachments"
+  },
+  "classes": {
+    "title": "Classes",
+    "create": "New class",
+    "name": "Class name",
+    "code": "Join code",
+    "description": "Description",
+    "students": "Students",
+    "teacher": "Teacher"
+  }
+}

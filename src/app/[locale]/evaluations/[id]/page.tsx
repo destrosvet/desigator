@@ -3,17 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EvaluationDetailClient } from "./evaluation-detail-client";
+import { evaluationScope } from "@/lib/evaluations";
 
 export default async function EvaluationDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) redirect(`/${locale}/auth/login`);
 
-  const where = session.user.role === "ADMIN"
-    ? { id }
-    : session.user.role === "STUDENT"
-      ? { id, submission: { studentId: session.user.id } }
-      : { id, OR: [{ evaluatorId: session.user.id }, { submission: { task: { creatorId: session.user.id } } }] };
+  const where = { AND: [{ id }, evaluationScope(session.user)] };
 
   const evaluation = await db.evaluation.findFirst({
     where,
@@ -23,7 +20,7 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
       submission: {
         include: {
           student: { select: { name: true, email: true } },
-          attachments: { select: { id: true, originalName: true, s3Url: true } },
+          attachments: { select: { id: true, originalName: true, mimeType: true, size: true }, orderBy: { uploadedAt: "asc" as const } },
           task: { include: { criteria: { orderBy: { order: "asc" } } } },
         },
       },
@@ -31,5 +28,11 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
   });
   if (!evaluation) notFound();
 
-  return <EvaluationDetailClient evaluation={JSON.parse(JSON.stringify(evaluation))} role={session.user.role} />;
+  const queue = await db.evaluation.findMany({
+    where: { AND: [evaluationScope(session.user), { evaluatorId: evaluation.evaluatorId, submission: { taskId: evaluation.submission.taskId } }] },
+    select: { id: true, status: true, totalPoints: true, submission: { select: { student: { select: { name: true } } } } },
+    orderBy: [{ submission: { student: { name: "asc" } } }, { id: "asc" }],
+  });
+
+  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(evaluation))} queue={queue} role={session.user.role} />;
 }

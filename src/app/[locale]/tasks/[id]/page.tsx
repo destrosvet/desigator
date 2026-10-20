@@ -17,11 +17,15 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
       subject: { select: { name: true, class: { select: { name: true } } } },
       criteria: { orderBy: { order: "asc" } },
       submissions: {
-        where: session.user.role === "STUDENT" ? { studentId: session.user.id } : undefined,
+        where: session.user.role === "STUDENT" ? { studentId: session.user.id }
+          : session.user.role === "EVALUATOR" ? { evaluations: { some: { evaluatorId: session.user.id } } } : undefined,
         include: {
           student: { select: { id: true, name: true, email: true } },
           attachments: { select: { id: true, originalName: true, size: true, s3Url: true } },
-          evaluations: { include: { evaluator: { select: { name: true } } } },
+          evaluations: {
+            where: session.user.role === "EVALUATOR" ? { evaluatorId: session.user.id } : session.user.role === "STUDENT" ? { status: "COMPLETED" } : undefined,
+            include: { evaluator: { select: { name: true } } },
+          },
         },
         orderBy: { submittedAt: "desc" },
       },
@@ -29,7 +33,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
   });
   if (!task) notFound();
 
-  const evaluators = session.user.role === "STUDENT" ? [] : await db.user.findMany({
+  const evaluators = !["ADMIN", "TEACHER"].includes(session.user.role) ? [] : await db.user.findMany({
     where: { role: { in: ["TEACHER", "EVALUATOR"] }, isActive: true },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },

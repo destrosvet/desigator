@@ -124,7 +124,7 @@ export function TaskDetailClient({ task, role, locale, evaluators }: { task: Tas
             <CardHeader><CardTitle>Moje odevzdání</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2"><Label htmlFor="submission-content">Text práce</Label><Textarea id="submission-content" value={content} onChange={(event) => setContent(event.target.value)} rows={8} /></div>
-              <div className="space-y-2"><Label htmlFor="submission-files">Přílohy</Label><Input id="submission-files" type="file" multiple accept=".pdf,.zip,.jpg,.jpeg,.png" onChange={(event) => setFiles(Array.from(event.target.files || []))} /></div>
+              <div className="space-y-2"><Label htmlFor="submission-files">Přílohy</Label><Input id="submission-files" type="file" multiple accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif" onChange={(event) => setFiles(Array.from(event.target.files || []))} /></div>
               <Button onClick={submitWork} disabled={busy || task.status !== "PUBLISHED"}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Odevzdat</Button>
               {message ? <p role="status" className="text-sm">{message}</p> : null}
               {task.submissions[0]?.attachments.map((attachment) => <a key={attachment.id} href={attachment.s3Url} className="flex items-center gap-2 text-sm underline"><Paperclip className="size-4" />{attachment.originalName}</a>)}
