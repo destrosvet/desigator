@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Paperclip } from "lucide-react";
 
@@ -34,12 +35,13 @@ type TaskDetail = {
   submissions: Submission[];
 };
 
-export function TaskDetailClient({ task, role, locale }: { task: TaskDetail; role: string; locale: string }) {
+export function TaskDetailClient({ task, role, locale, evaluators }: { task: TaskDetail; role: string; locale: string; evaluators: Array<{ id: string; name: string; email: string }> }) {
   const router = useRouter();
   const [content, setContent] = useState(task.submissions[0]?.content || "");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [evaluatorId, setEvaluatorId] = useState("");
   const canManage = role === "ADMIN" || role === "TEACHER";
 
   async function submitWork() {
@@ -72,7 +74,7 @@ export function TaskDetailClient({ task, role, locale }: { task: TaskDetail; rol
     const response = await fetch("/api/evaluations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ submissionId }),
+      body: JSON.stringify({ submissionId, evaluatorId: evaluatorId || undefined }),
     });
     const result = await response.json();
     setBusy(false);
@@ -132,6 +134,7 @@ export function TaskDetailClient({ task, role, locale }: { task: TaskDetail; rol
           <Card>
             <CardHeader><CardTitle>Odevzdání ({task.submissions.length})</CardTitle></CardHeader>
             <CardContent className="space-y-3">
+              {evaluators.length ? <div className="space-y-2"><Label>Hodnotitel nového hodnocení</Label><Select value={evaluatorId} onValueChange={setEvaluatorId}><SelectTrigger><SelectValue placeholder="Já (výchozí)" /></SelectTrigger><SelectContent>{evaluators.map((evaluator) => <SelectItem key={evaluator.id} value={evaluator.id}>{evaluator.name} · {evaluator.email}</SelectItem>)}</SelectContent></Select></div> : null}
               {task.submissions.map((submission) => (
                 <div key={submission.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
                   <div><p className="font-medium">{submission.student.name}</p><p className="text-sm text-muted-foreground">{submission.student.email} · {submission.status}</p></div>

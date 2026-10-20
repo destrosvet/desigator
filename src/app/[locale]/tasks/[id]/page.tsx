@@ -29,11 +29,18 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
   });
   if (!task) notFound();
 
+  const evaluators = session.user.role === "STUDENT" ? [] : await db.user.findMany({
+    where: { role: { in: ["TEACHER", "EVALUATOR"] }, isActive: true },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+
   return (
     <TaskDetailClient
       locale={locale}
       role={session.user.role}
       task={JSON.parse(JSON.stringify(task))}
+      evaluators={evaluators}
     />
   );
 }
