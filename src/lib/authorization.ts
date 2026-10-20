@@ -64,3 +64,33 @@ export async function canReadAttachment(user: AuthUser, attachmentId: string): P
     select: { id: true },
   }));
 }
+
+
+export async function canViewTask(user: AuthUser, taskId: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  return Boolean(await db.task.findFirst({
+    where: {
+      id: taskId,
+      OR: [
+        { creatorId: user.id },
+        { subject: { class: { students: { some: { studentId: user.id } } } }, status: "PUBLISHED" },
+        { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } },
+      ],
+    },
+    select: { id: true },
+  }));
+}
+
+export async function canManageEvaluation(user: AuthUser, evaluationId: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  return Boolean(await db.evaluation.findFirst({
+    where: {
+      id: evaluationId,
+      OR: [
+        { evaluatorId: user.id },
+        { submission: { task: { creatorId: user.id } } },
+      ],
+    },
+    select: { id: true },
+  }));
+}
