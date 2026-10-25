@@ -1,13 +1,19 @@
+import { managedTaskScope } from "@/lib/authorization";
+import { isAdmin, canEvaluate, hasRole } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { AuthUser } from "@/lib/authorization";
 
 export function evaluationScope(user: AuthUser): Prisma.EvaluationWhereInput {
-  if (user.role === "ADMIN") return {};
-  if (user.role === "TEACHER") return { OR: [{ evaluatorId: user.id }, { submission: { task: { creatorId: user.id } } }] };
-  if (user.role === "EVALUATOR") return { evaluatorId: user.id };
-  return { status: "COMPLETED", submission: { studentId: user.id } };
+ if (isAdmin(user)) return {};
+ const scopes: Prisma.EvaluationWhereInput[] = [{ submission: { task: managedTaskScope(user) } }];
+ if (canEvaluate(user)) scopes.push({ evaluatorId: user.id });
+ if (hasRole(user, "STUDENT")) scopes.push({ status: "COMPLETED", submission: {
+  studentId: user.id, stage: "FINAL", resultsPublishedAt: { not: null },
+  task: { status: { in: ["PUBLISHED", "CLOSED"] }, subject: { class: { organizationId: user.organizationId || "__no_organization__", students: { some: { studentId: user.id } } } } },
+ } });
+ return { OR: scopes };
 }
 
 export const evaluationQuerySchema = z.object({

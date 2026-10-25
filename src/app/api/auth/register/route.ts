@@ -42,6 +42,7 @@ export async function POST(req: Request) {
         email,
         password: hashedPassword,
         role: "STUDENT",
+        roles: ["STUDENT"],
       },
       select: {
         id: true,

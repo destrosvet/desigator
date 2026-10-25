@@ -1,7 +1,10 @@
+import { teacherStatePath } from "./auth-setup";
 import { expect, test, type Page } from "@playwright/test";
 
 // Run only against an isolated, demo-seeded database. Never use production accounts.
 test.skip(process.env.E2E_WORKFLOW !== "true", "Requires an isolated database with npm run db:seed");
+
+test.use({ storageState: teacherStatePath });
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/cs/auth/login");
@@ -12,7 +15,6 @@ async function login(page: Page, email: string, password: string) {
 }
 
 test("teacher can select a subject and create a task from the form", async ({ page }) => {
-  await login(page, "teacher@desigator.cz", "teacher123");
   await page.goto("/cs/tasks");
   await page.getByRole("button", { name: "Nové zadání", exact: true }).click();
   const dialog = page.getByRole("dialog");
@@ -28,14 +30,13 @@ test("teacher can select a subject and create a task from the form", async ({ pa
 
 test("teacher creates a task, student submits, assigned evaluator grades; other submissions stay private", async ({ browser, baseURL }) => {
   test.setTimeout(90_000);
-  const teacherContext = await browser.newContext({ baseURL });
+  const teacherContext = await browser.newContext({ baseURL, storageState: teacherStatePath });
   const studentContext = await browser.newContext({ baseURL });
   const evaluatorContext = await browser.newContext({ baseURL });
   try {
     const teacher = await teacherContext.newPage();
     const student = await studentContext.newPage();
     const evaluator = await evaluatorContext.newPage();
-    await login(teacher, "teacher@desigator.cz", "teacher123");
     const subjectsResponse = await teacher.request.get("/api/subjects");
     expect(subjectsResponse.ok()).toBeTruthy();
     const { subjects } = await subjectsResponse.json();
@@ -48,7 +49,7 @@ test("teacher creates a task, student submits, assigned evaluator grades; other 
     const { task } = await created.json();
     await teacher.goto(`/cs/tasks/${task.id}`);
     await teacher.getByRole("button", { name: "Publikovat", exact: true }).click();
-    await expect(teacher.getByText("PUBLISHED", { exact: true })).toBeVisible();
+    await expect(teacher.getByText("Publikováno", { exact: true })).toBeVisible();
 
     await login(evaluator, "evaluator@desigator.cz", "evaluator123");
     const before = await evaluator.request.get(`/api/tasks?search=${encodeURIComponent(title)}`);
@@ -57,13 +58,17 @@ test("teacher creates a task, student submits, assigned evaluator grades; other 
 
     await login(student, "student1@desigator.cz", "student123");
     await student.goto(`/cs/tasks/${task.id}`);
+    await student.getByRole("button", { name: /Odevzdat práci|Otevřít moji práci/ }).click();
+    await student.getByLabel("Stav nové verze").selectOption("FINAL");
     await student.getByLabel("Text práce").fill("Řešení z integračního testu");
     await student.getByRole("button", { name: "Odevzdat", exact: true }).click();
     await expect(student.getByRole("status")).toContainText("Práce byla odevzdána.");
     const detail = await (await teacher.request.get(`/api/tasks/${task.id}`)).json();
     const submissionId = detail.task.submissions[0].id;
     const users = await (await teacher.request.get("/api/users?role=EVALUATOR")).json();
-    const assignment = await teacher.request.post("/api/evaluations", { data: { submissionId, evaluatorId: users.users[0].id } });
+    const evaluatorSession = await (await evaluator.request.get("/api/auth/session")).json();
+    expect(users.users.some((user: { id: string }) => user.id === evaluatorSession.user.id)).toBe(true);
+    const assignment = await teacher.request.post("/api/evaluations", { data: { submissionId, evaluatorId: evaluatorSession.user.id } });
     expect(assignment.status()).toBe(201);
     const { evaluation } = await assignment.json();
 
@@ -84,6 +89,8 @@ test("teacher creates a task, student submits, assigned evaluator grades; other 
     await evaluator.getByRole("spinbutton").fill("85");
     await evaluator.getByRole("button", { name: /dokončit/i }).click();
     await expect(evaluator.getByRole("status")).toContainText(/uložen/i);
+    expect((await student.request.get(`/api/evaluations/${evaluation.id}`)).status()).toBe(404);
+    expect((await teacher.request.patch(`/api/submissions/${submissionId}/publication`, { data: { published: true } })).status()).toBe(200);
     const result = await (await student.request.get(`/api/evaluations/${evaluation.id}`)).json();
     expect(result.evaluation.totalPoints).toBe(85);
     expect(result.evaluation.status).toBe("COMPLETED");

@@ -29,7 +29,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
     const expectedId = formRef.current.id;
     const operation = saveChain.current.then(async () => {
       const snapshot = formRef.current;
-      if (!canEdit || snapshot.id !== expectedId) return true;
+      if (!canEdit || snapshot.readOnly || snapshot.id !== expectedId) return true;
       const complete = intent !== "draft" && isFullyRated(snapshot);
       if (intent === "complete" && !isFullyRated(snapshot)) { setError("Nejprve ohodnoťte všechna kritéria."); return false; }
       const status = complete || (snapshot.status === "COMPLETED" && isFullyRated(snapshot)) ? "COMPLETED" : "IN_PROGRESS";
@@ -59,7 +59,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
   }, [canEdit]);
 
   const change = useCallback((transform: (draft: ReviewDraft) => ReviewDraft) => {
-    if (moving.current || !canEdit) return;
+    if (moving.current || !canEdit || formRef.current.readOnly) return;
     const next = { ...transform(formRef.current), revision: formRef.current.revision + 1 };
     formRef.current = next; setForm(next); setMessage(""); setError("");
     if (timer.current) clearTimeout(timer.current);

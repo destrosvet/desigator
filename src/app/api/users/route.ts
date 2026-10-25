@@ -16,8 +16,8 @@ export async function GET(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Unsupported role" }, { status: 400 });
 
   const users = await db.user.findMany({
-    where: { role: parsed.data, isActive: true },
-    select: { id: true, name: true, email: true },
+    where: { isActive: true, ...(parsed.data === "TEACHER" ? { organizationId: session.user.organizationId || "__no_organization__" } : {}), OR: [{ roles: { has: parsed.data } }, { roles: { isEmpty: true }, role: parsed.data }] },
+    select: { id: true, name: true },
     orderBy: { name: "asc" },
     take: 500,
   });

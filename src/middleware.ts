@@ -12,7 +12,7 @@ const authMiddleware = withAuth(
     const prefix = pathname.split("/")[1];
     const locale = locales.find((value) => value === prefix) || defaultLocale;
     const routePath = locales.some((value) => value === prefix) ? pathname.slice(prefix.length + 1) || "/" : pathname;
-    if (routePath.startsWith("/auth/") || routePath === "/") return intlMiddleware(req);
+    if (routePath.startsWith("/auth/") || routePath === "/" || routePath === "/results" || routePath.startsWith("/results/") || routePath.startsWith("/invitations/")) return intlMiddleware(req);
     if (!token) {
       const login = new URL(`/${locale}/auth/login`, req.url);
       login.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
@@ -33,8 +33,8 @@ const authMiddleware = withAuth(
 
     // Student only dashboard and tasks
     if (role === "STUDENT" && (
-      pathname.includes("/students") ||
-      pathname.includes("/evaluations") ||
+      routePath.startsWith("/students") ||
+      routePath.startsWith("/evaluations") ||
       pathname.includes("/classes/new")
     )) {
       return NextResponse.redirect(new URL("/", req.url));
@@ -43,6 +43,7 @@ const authMiddleware = withAuth(
     return intlMiddleware(req);
   },
   {
+    secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
     callbacks: {
       // The callback above performs redirects so the requested locale is preserved.
       authorized: () => true,

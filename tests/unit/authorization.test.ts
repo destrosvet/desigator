@@ -28,10 +28,10 @@ describe("object authorization", () => {
 
   it("allows a teacher only when the owned class exists", async () => {
     dbMock.class.findFirst.mockResolvedValueOnce({ id: "class-1" }).mockResolvedValueOnce(null);
-    await expect(canManageClass({ id: "teacher", role: "TEACHER" }, "class-1")).resolves.toBe(true);
-    await expect(canManageClass({ id: "teacher", role: "TEACHER" }, "class-2")).resolves.toBe(false);
+    await expect(canManageClass({ id: "teacher", role: "TEACHER", organizationId: "school-a" }, "class-1")).resolves.toBe(true);
+    await expect(canManageClass({ id: "teacher", role: "TEACHER", organizationId: "school-a" }, "class-2")).resolves.toBe(false);
     expect(dbMock.class.findFirst).toHaveBeenCalledWith({
-      where: { id: "class-1", teacherId: "teacher" },
+      where: { id: "class-1", organizationId: "school-a", teacherId: "teacher" },
       select: { id: true },
     });
   });

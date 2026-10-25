@@ -1,169 +1,97 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { uploadFileSizeLimit } from "@/lib/media";
+import { extractStudentId, suggestStudent } from "@/lib/import-matching";
 
-interface BulkResult {
-  filename: string;
-  status: "success" | "student_not_found" | "error";
-  studentName?: string;
-  externalId?: string;
-  message?: string;
-}
+type Student = { id: string; name: string; externalId: string | null; hasSubmission: boolean };
+type Row = { file: File; studentId: string; excluded: boolean };
+type Roster = { students: Student[]; subject: string; className: string; year: number };
 
 export default function BulkUploadPage() {
+  return <Suspense fallback={<AppShell>Načítání importu…</AppShell>}><BulkUploadForm /></Suspense>;
+}
+
+function BulkUploadForm() {
   const { data: session } = useSession();
-  const router = useRouter();
-
-  const [taskId, setTaskId] = useState("");
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [results, setResults] = useState<BulkResult[]>([]);
-  const [summary, setSummary] = useState({ total: 0, success: 0, notFound: 0, errors: 0 });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Načíst tasky při mount
+  const params = useSearchParams();
+  const [taskId, setTaskId] = useState(params.get("taskId") || "");
+  const [tasks, setTasks] = useState<Array<{ id: string; title: string }>>([]);
+  const [roster, setRoster] = useState<Roster | null>(null);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [stage, setStage] = useState("FINAL");
+  const [changeNote, setChangeNote] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const canUpload = ["ADMIN", "TEACHER"].includes(session?.user?.role || "");
   useEffect(() => {
-    fetch("/api/tasks")
-      .then((r) => r.json())
-      .then((d) => setTasks(d.tasks || []));
-  }, []);
-
-  const handleUpload = async () => {
-    if (!taskId || !files || files.length === 0) return;
-
-    setUploading(true);
-    const formData = new FormData();
-    formData.append("taskId", taskId);
-    for (let i = 0; i < files.length; i++) {
-      formData.append("files", files[i]);
-    }
-
+    if (!canUpload) return;
+    let active = true;
+    void (async () => {
+      try {
+        const all: Array<{ id: string; title: string }> = [];
+        let page = 1;
+        while (active) {
+          const res = await fetch("/api/tasks?limit=100&page=" + page);
+          if (!res.ok) throw new Error();
+          const data = await res.json(); all.push(...data.tasks);
+          if (all.length >= data.total || !data.tasks.length) break;
+          page++;
+        }
+        if (active) setTasks(all);
+      } catch { if (active) setMessage("Zadání se nepodařilo načíst."); }
+    })();
+    return () => { active = false; };
+  }, [canUpload]);
+  useEffect(() => {
+    if (!taskId || !canUpload) return;
+    let active = true;
+    fetch("/api/submissions/bulk-upload?taskId=" + encodeURIComponent(taskId)).then(async (res) => { const data = await res.json(); if (!res.ok) throw new Error(data.error); return data; }).then((data) => { if (active) setRoster(data); }).catch((error) => { if (active) setMessage(error.message || "Seznam žáků se nepodařilo načíst."); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [taskId, canUpload]);
+  const selected = rows.filter((row) => !row.excluded);
+  const invalid = selected.some((row) => !/[.](jpe?g|png|webp|gif|pdf|zip|mp4|webm|glb)$/i.test(row.file.name) || !row.studentId);
+  const duplicates = new Set(selected.map((row) => JSON.stringify([row.studentId, row.file.name, row.file.size]))).size !== selected.length;
+  const overLimit = selected.length > 20 || selected.some((row) => row.file.size > uploadFileSizeLimit(row.file.type)) || selected.reduce((sum, row) => sum + row.file.size, 0) > 100 * 1024 * 1024;
+  function update(index: number, patch: Partial<Row>) { setConfirmed(false); setRows((items) => items.map((row, i) => i === index ? { ...row, ...patch } : row)); }
+  async function upload() {
+    if (!confirmed || !selected.length || invalid || duplicates || overLimit) return;
+    setBusy(true); setMessage("");
     try {
-      const res = await fetch("/api/submissions/bulk-upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      setResults(data.results || []);
-      setSummary(data.summary || { total: 0, success: 0, notFound: 0, errors: 0 });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const canUpload = session?.user?.role === "ADMIN" || session?.user?.role === "TEACHER";
-
-  if (!canUpload) {
-    return (
-      <AppShell>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">K této stránce nemáte přístup.</p>
-        </div>
-      </AppShell>
-    );
+      const data = new FormData(); data.set("taskId", taskId); data.set("stage", stage); data.set("changeNote", changeNote); data.set("confirmed", "true"); data.set("studentIds", JSON.stringify(selected.map((row) => row.studentId))); selected.forEach((row) => data.append("files", row.file));
+      const response = await fetch("/api/submissions/bulk-upload", { method: "POST", body: data });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Import selhal.");
+      setMessage((result.replayed ? "Tato dávka již byla importována. Další verze nevznikly. Evidováno " : "Uloženo ") + result.summary.success + " souborů pro " + new Set(selected.map((row) => row.studentId)).size + " žáků.");
+      setRoster((current) => current ? { ...current, students: current.students.map((student) => selected.some((row) => row.studentId === student.id) ? { ...student, hasSubmission: true } : student) } : null);
+      setRows([]); setConfirmed(false);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Import selhal."); }
+    finally { setBusy(false); }
   }
+  return <AppShell><div className="mx-auto max-w-5xl space-y-5"><h1 className="text-2xl font-bold">Hromadný import prací</h1><p className="text-sm text-muted-foreground">Vyberte práce ze síťového disku. U názvu 4464341_02.jpg je 4464341 školní ID, _02 rozlišuje pohled. Před potvrzením se nic nenahrává ani nezapisuje.</p>{!canUpload ? <p>Import je dostupný učiteli a administrátorovi.</p> : <>
+    <fieldset disabled={busy} className="space-y-4 rounded-xl border p-4">
+      <div className="space-y-1"><Label htmlFor="import-task">Zadání</Label><select id="import-task" value={taskId} className="h-10 w-full rounded border bg-background px-2" onChange={(event) => { setTaskId(event.target.value); setRoster(null); setRows([]); setConfirmed(false); setMessage(""); setLoading(Boolean(event.target.value)); }}><option value="">Vyberte zadání</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></div>
+      {loading ? <p>Načítání žáků…</p> : null}
+      {roster ? <><p>{roster.subject} · {roster.className} · akademický rok {roster.year} · {roster.students.length} žáků</p><div className="space-y-1"><Label htmlFor="import-stage">Stav nové verze</Label><select id="import-stage" value={stage} onChange={(event) => { setStage(event.target.value); setConfirmed(false); }} className="h-10 w-full rounded border bg-background px-2"><option value="WIP">Rozpracováno (WIP)</option><option value="FINAL">Finální</option></select></div><Label htmlFor="import-note">Popis nové verze (volitelný)</Label><Input id="import-note" value={changeNote} maxLength={2000} onChange={(event) => { setChangeNote(event.target.value); setConfirmed(false); }} /><Label htmlFor="import-files">Soubory (max. 20, MP4 do 100 MB, ostatní do 25 MB, dávka celkem 100 MB)</Label><Input id="import-files" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.zip,.mp4,.webm,.glb" onChange={(event) => { setRows(Array.from(event.target.files || []).map((file) => ({ file, studentId: suggestStudent(file.name, roster.students), excluded: false }))); setConfirmed(false); setMessage(""); event.target.value = ""; }} /></> : null}
+      {rows.length ? <><div className="space-y-1"><Label htmlFor="student-search">Hledat žáka ve výběrech</Label><Input id="student-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Jméno nebo školní ID" /></div><div className="space-y-3">{rows.map((row, index) => {
+        const student = roster?.students.find((item) => item.id === row.studentId);
+        const options = roster?.students.filter((item) => item.id === row.studentId || (item.name + " " + item.externalId).toLocaleLowerCase().includes(search.toLocaleLowerCase())) || [];
+        return <div key={index} className="flex flex-wrap items-center gap-3 rounded-lg border p-3"><LocalPreview file={row.file} /><div className="min-w-40 flex-1"><p className="break-all font-medium">{row.file.name}</p><p className="text-xs text-muted-foreground">ID z názvu: {extractStudentId(row.file.name) || "nerozpoznáno"} · {Math.ceil(row.file.size / 1024)} KB</p>{!row.excluded && !row.studentId ? <p className="text-sm text-destructive">Vyberte žáka nebo soubor vyřaďte.</p> : null}{student?.hasSubmission ? <p className="text-sm text-destructive">Žák již má práci. Vznikne nová verze, předchozí soubory a hodnocení zůstanou zachované.</p> : null}{!/[.](jpe?g|png|webp|gif|pdf|zip|mp4|webm|glb)$/i.test(row.file.name) ? <p className="text-sm text-destructive">Opravte příponu souboru před importem.</p> : null}</div><div className="min-w-52 flex-1"><Label htmlFor={"author-" + index}>Autor souboru {index + 1}</Label><select id={"author-" + index} disabled={row.excluded} value={row.studentId} onChange={(event) => update(index, { studentId: event.target.value })} className="h-10 w-full rounded border bg-background px-2"><option value="">Vyberte žáka</option>{options.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.externalId || "bez ID"}{item.hasSubmission ? " · nová verze" : ""}</option>)}</select></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={row.excluded} onChange={(event) => update(index, { excluded: event.target.checked })} />Vyřadit</label></div>;
+      })}</div><p>{selected.length} souborů · {new Set(selected.map((row) => row.studentId).filter(Boolean)).size} žáků · {rows.length - selected.length} vyřazeno</p>{duplicates ? <p role="alert">Dávka obsahuje duplicitní soubory. Vyřaďte je.</p> : null}{overLimit ? <p role="alert">Dávka překračuje limity uploadu.</p> : null}<label className="flex items-center gap-2"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={invalid || duplicates || overLimit || !selected.length} />Zkontroloval/a jsem autory všech vybraných souborů.</label><div className="flex flex-wrap gap-3"><Button onClick={() => void upload()} disabled={!confirmed || invalid || duplicates || overLimit || !selected.length}>{busy ? "Nahrávání…" : "Potvrdit párování a nahrát"}</Button><Button variant="outline" onClick={() => { setRows([]); setConfirmed(false); setMessage(""); }}>Zrušit výběr</Button></div></> : null}
+    </fieldset></>}{message ? <p role="status" className="rounded border p-3">{message}</p> : null}</div></AppShell>;
+}
 
-  return (
-    <AppShell>
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Hromadné nahrání odevzdání</h1>
-          <p className="text-muted-foreground mt-1">
-            Nahrajte soubory pro více studentů najednou. Název souboru musí obsahovat externalId studenta (např. <code>S001_obrazek.jpg</code>).
-          </p>
-        </div>
-
-        <Card>
-          <CardHeader><CardTitle>Výběr zadání a souborů</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Zadání (Task)</Label>
-              <Select value={taskId} onValueChange={setTaskId}>
-                <SelectTrigger><SelectValue placeholder="Vyberte zadání" /></SelectTrigger>
-                <SelectContent>
-                  {tasks.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Soubory</Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,.pdf,.zip"
-                onChange={(e) => setFiles(e.target.files)}
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-              />
-              {files && files.length > 0 && (
-                <p className="text-sm text-muted-foreground">Vybráno {files.length} souborů</p>
-              )}
-            </div>
-
-            <Button onClick={handleUpload} disabled={uploading || !taskId || !files} className="w-full">
-              {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-              {uploading ? "Nahrávání..." : "Nahrát soubory"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {results.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Výsledky
-                <Badge variant="default" className="bg-green-100 text-green-800">{summary.success} úspěchů</Badge>
-                {summary.notFound > 0 && <Badge variant="secondary" className="bg-orange-100 text-orange-800">{summary.notFound} nenalezeno</Badge>}
-                {summary.errors > 0 && <Badge variant="destructive">{summary.errors} chyb</Badge>}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Soubor</TableHead>
-                    <TableHead>ExternalId</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Stav</TableHead>
-                    <TableHead>Zpráva</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.map((r, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{r.filename}</TableCell>
-                      <TableCell>{r.externalId || "-"}</TableCell>
-                      <TableCell>{r.studentName || "-"}</TableCell>
-                      <TableCell>
-                        {r.status === "success" && <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />OK</Badge>}
-                        {r.status === "student_not_found" && <Badge variant="secondary" className="bg-orange-100 text-orange-800"><AlertCircle className="w-3 h-3 mr-1" />Nenalezen</Badge>}
-                        {r.status === "error" && <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Chyba</Badge>}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.message || "-"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </AppShell>
-  );
+function LocalPreview({ file }: { file: File }) {
+  const ref = useRef<HTMLImageElement>(null);
+  const supported = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type);
+  useEffect(() => { if (!supported || !ref.current) return; const url = URL.createObjectURL(file); ref.current.src = url; return () => URL.revokeObjectURL(url); }, [file, supported]);
+  return supported ? <img ref={ref} alt={file.name} className="h-16 w-20 object-contain" /> : <span className="text-xs text-muted-foreground">Bez náhledu</span>;
 }

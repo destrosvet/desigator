@@ -1,3 +1,4 @@
+import { visibleClassScope } from "@/lib/authorization";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -12,7 +13,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ lo
   const targetClass = await db.class.findFirst({
     where: {
       id,
-      ...(session.user.role === "ADMIN" ? {} : session.user.role === "TEACHER" ? { teacherId: session.user.id } : { students: { some: { studentId: session.user.id } } }),
+      ...visibleClassScope(session.user),
     },
     include: {
       teacher: { select: { name: true, email: true } },
@@ -23,7 +24,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ lo
   if (!targetClass) notFound();
 
   const candidates = session.user.role === "STUDENT" ? [] : await db.user.findMany({
-    where: { role: "STUDENT", isActive: true, classMemberships: { none: { classId: id } } },
+    where: { role: "STUDENT", organizationId: targetClass.organizationId, isActive: true, classMemberships: { none: { classId: id } } },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
     take: 500,

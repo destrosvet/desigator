@@ -1,3 +1,4 @@
+import { visibleClassScope } from "@/lib/authorization";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -10,11 +11,7 @@ export default async function ClassesPage({ params }: { params: Promise<{ locale
   if (!session) redirect(`/${locale}/auth/login`);
 
   const classes = await db.class.findMany({
-    where: session.user.role === "ADMIN"
-      ? { isActive: true }
-      : session.user.role === "TEACHER"
-        ? { teacherId: session.user.id, isActive: true }
-        : { students: { some: { studentId: session.user.id } }, isActive: true },
+    where: visibleClassScope(session.user),
     include: {
       teacher: { select: { name: true } },
       _count: { select: { students: true, subjects: true } },

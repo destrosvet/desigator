@@ -14,7 +14,7 @@ export async function GET() {
           database: "connected",
         },
       },
-      { status: 200 }
+      { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     return NextResponse.json(
@@ -24,9 +24,8 @@ export async function GET() {
         services: {
           database: "disconnected",
         },
-        error: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 503 }
+      { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

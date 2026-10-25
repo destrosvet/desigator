@@ -58,3 +58,17 @@ test-results/
 lint-results.json
 db/
 .cline/
+
+# Reference implementation, not part of the new application
+.old/
+
+# Local runtimes, fixtures, credentials and deployment overrides
+local-*
+.env*
+!.env.example
+.codex/
+.agents/
+docker-compose*.yml
+compose*.yml
+*.dump
+backups/

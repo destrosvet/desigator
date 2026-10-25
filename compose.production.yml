@@ -1,0 +1,16 @@
+# Explicit production file; does not load the development MinIO stack.
+# docker compose --env-file .env.production -f compose.production.yml up -d
+services:
+  app:
+    image: ${DESIGATOR_IMAGE:?Set DESIGATOR_IMAGE to the tested release tag}
+    restart: unless-stopped
+    init: true
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    security_opt:
+      - no-new-privileges:true

@@ -1,97 +1,72 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { canTeach, canEvaluate, hasRole, isAdmin, isSchoolAdmin, schoolId, type PermissionUser } from "@/lib/permissions";
+export { isAdmin } from "@/lib/permissions";
+export type AuthUser = PermissionUser;
 
-export type AuthUser = { id: string; role: string };
-
-export function isAdmin(user: AuthUser): boolean {
-  return user.role === "ADMIN";
+export function managedClassScope(user: AuthUser): Prisma.ClassWhereInput {
+  if (isAdmin(user)) return {};
+  if (!canTeach(user)) return { id: { in: [] } };
+  return { organizationId: schoolId(user), ...(isSchoolAdmin(user) ? {} : { teacherId: user.id }) };
 }
-
-export async function canManageClass(user: AuthUser, classId: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
-  if (user.role !== "TEACHER") return false;
-  return Boolean(await db.class.findFirst({
-    where: { id: classId, teacherId: user.id },
-    select: { id: true },
-  }));
+export function managedSubjectScope(user: AuthUser): Prisma.SubjectWhereInput {
+  if (isAdmin(user)) return {};
+  if (!canTeach(user)) return { id: { in: [] } };
+  return { class: { organizationId: schoolId(user) }, ...(isSchoolAdmin(user) ? {} : { teacherId: user.id }) };
 }
-
-export async function canViewSubject(user: AuthUser, subjectId: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
-  return Boolean(await db.subject.findFirst({
-    where: {
-      id: subjectId,
-      OR: [
-        { teacherId: user.id },
-        { class: { students: { some: { studentId: user.id } } } },
-        { tasks: { some: { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } } } },
-      ],
-    },
-    select: { id: true },
-  }));
+export function managedTaskScope(user: AuthUser): Prisma.TaskWhereInput {
+  if (isAdmin(user)) return {};
+  if (!canTeach(user)) return { id: { in: [] } };
+  return { subject: { class: { organizationId: schoolId(user) } }, ...(isSchoolAdmin(user) ? {} : { creatorId: user.id }) };
 }
-
-export async function canManageSubject(user: AuthUser, subjectId: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
-  if (user.role !== "TEACHER") return false;
-  return Boolean(await db.subject.findFirst({
-    where: { id: subjectId, teacherId: user.id, class: { teacherId: user.id } },
-    select: { id: true },
-  }));
+export function visibleClassScope(user: AuthUser): Prisma.ClassWhereInput {
+  if (isAdmin(user)) return {};
+  return { OR: [managedClassScope(user), ...(hasRole(user, "STUDENT") ? [{ organizationId: schoolId(user), students: { some: { studentId: user.id } } }] : [])] };
 }
-
-export async function canManageTask(user: AuthUser, taskId: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
-  if (user.role !== "TEACHER") return false;
-  return Boolean(await db.task.findFirst({
-    where: { id: taskId, creatorId: user.id, subject: { teacherId: user.id, class: { teacherId: user.id } } },
-    select: { id: true },
-  }));
+export function visibleSubjectScope(user: AuthUser): Prisma.SubjectWhereInput {
+  if (isAdmin(user)) return {};
+  return { OR: [managedSubjectScope(user), ...(hasRole(user, "STUDENT") ? [{ class: { organizationId: schoolId(user), students: { some: { studentId: user.id } } } }] : []),
+    ...(canEvaluate(user) ? [{ tasks: { some: { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } } } }] : [])] };
 }
-
-export async function canReadAttachment(user: AuthUser, attachmentId: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
-  return Boolean(await db.attachment.findFirst({
-    where: {
-      id: attachmentId,
-      OR: [
-        { task: { creatorId: user.id } },
-        { task: { status: { in: ["PUBLISHED", "CLOSED"] }, subject: { class: { students: { some: { studentId: user.id } } } } } },
-        { task: { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } } },
-        { submission: { studentId: user.id } },
-        { submission: { task: { creatorId: user.id } } },
-        { submission: { evaluations: { some: { evaluatorId: user.id } } } },
-      ],
-    },
-    select: { id: true },
-  }));
+export function visibleTaskScope(user: AuthUser): Prisma.TaskWhereInput {
+  if (isAdmin(user)) return {};
+  return { OR: [managedTaskScope(user), ...(hasRole(user, "STUDENT") ? [{ status: { in: ["PUBLISHED", "CLOSED"] as ("PUBLISHED" | "CLOSED")[] }, subject: { class: { organizationId: schoolId(user), students: { some: { studentId: user.id } } } } }] : []),
+    ...(canEvaluate(user) ? [{ submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } }] : [])] };
 }
-
-
-export async function canViewTask(user: AuthUser, taskId: string): Promise<boolean> {
+export async function canManageClass(user: AuthUser, id: string): Promise<boolean> {
   if (isAdmin(user)) return true;
-  return Boolean(await db.task.findFirst({
-    where: {
-      id: taskId,
-      OR: [
-        { creatorId: user.id },
-        { subject: { class: { students: { some: { studentId: user.id } } } }, status: { in: ["PUBLISHED", "CLOSED"] } },
-        { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } },
-      ],
-    },
-    select: { id: true },
-  }));
+  if (!canTeach(user)) return false;
+  return Boolean(await db.class.findFirst({ where: { id, ...managedClassScope(user) }, select: { id: true } }));
 }
-
-export async function canManageEvaluation(user: AuthUser, evaluationId: string): Promise<boolean> {
+export async function canViewSubject(user: AuthUser, id: string): Promise<boolean> {
   if (isAdmin(user)) return true;
-  return Boolean(await db.evaluation.findFirst({
-    where: {
-      id: evaluationId,
-      OR: [
-        { evaluatorId: user.id },
-        { submission: { task: { creatorId: user.id } } },
-      ],
-    },
-    select: { id: true },
-  }));
+  return Boolean(await db.subject.findFirst({ where: { id, ...visibleSubjectScope(user) }, select: { id: true } }));
+}
+export async function canManageSubject(user: AuthUser, id: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  if (!canTeach(user)) return false;
+  return Boolean(await db.subject.findFirst({ where: { id, ...managedSubjectScope(user) }, select: { id: true } }));
+}
+export async function canManageTask(user: AuthUser, id: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  if (!canTeach(user)) return false;
+  return Boolean(await db.task.findFirst({ where: { id, ...managedTaskScope(user) }, select: { id: true } }));
+}
+export async function canReadAttachment(user: AuthUser, id: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  return Boolean(await db.attachment.findFirst({ where: { id, OR: [
+    { task: visibleTaskScope(user) },
+    { submission: { task: managedTaskScope(user) } },
+    { submission: { studentId: user.id, task: { subject: { class: { organizationId: schoolId(user) } } } } },
+    ...(canEvaluate(user) ? [{ submission: { evaluations: { some: { evaluatorId: user.id } } } }] : []),
+  ] }, select: { id: true } }));
+}
+export async function canViewTask(user: AuthUser, id: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  return Boolean(await db.task.findFirst({ where: { id, ...visibleTaskScope(user) }, select: { id: true } }));
+}
+export async function canManageEvaluation(user: AuthUser, id: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  if (!canEvaluate(user)) return false;
+  return Boolean(await db.evaluation.findFirst({ where: { id, evaluatorId: user.id }, select: { id: true } }));
 }

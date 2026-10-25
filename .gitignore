@@ -57,3 +57,12 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Local references, exports and backup material
+/.idea/
+/.old/
+/db/*.sql
+/db/legacy-data.json
+/backups/
+*.dump
+!.env.production.example

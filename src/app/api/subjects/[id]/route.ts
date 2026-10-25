@@ -1,8 +1,9 @@
+import { AdminRecordError, deleteAdminRecords } from "@/lib/admin-records";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canManageSubject, canViewSubject } from "@/lib/authorization";
+import { canManageSubject, canViewSubject, visibleTaskScope } from "@/lib/authorization";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -18,7 +19,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       include: {
         class: { select: { id: true, name: true } },
         teacher: { select: { id: true, name: true } },
-        tasks: { orderBy: { createdAt: "desc" } },
+        tasks: { where: visibleTaskScope(session.user), orderBy: { createdAt: "desc" } },
       },
     });
     if (!subject) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -67,9 +68,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (!(await canManageSubject(session.user, id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    await db.subject.delete({ where: { id } });
+    const body = await req.json().catch(() => null);
+    if (body?.confirmed !== true) return NextResponse.json({ error: "Smazání musí být potvrzené." }, { status: 400 });
+    await deleteAdminRecords(session.user, "subjects", [id]);
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof AdminRecordError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: "Failed to delete subject" }, { status: 500 });
   }
 }

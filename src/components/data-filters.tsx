@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -26,24 +26,17 @@ interface DataFiltersProps {
 export function DataFilters({ filters, onFiltersChange }: DataFiltersProps) {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    onFiltersChange(activeFilters);
-  }, [activeFilters, onFiltersChange]);
-
   const handleFilterChange = (key: string, value: string) => {
-    setActiveFilters((prev) => {
-      const next = { ...prev };
-      if (value && value !== "__ALL__") {
-        next[key] = value;
-      } else {
-        delete next[key];
-      }
-      return next;
-    });
+    const next = { ...activeFilters };
+    if (value && value !== "__ALL__") next[key] = value;
+    else delete next[key];
+    setActiveFilters(next);
+    onFiltersChange(next);
   };
 
   const handleClear = () => {
     setActiveFilters({});
+    onFiltersChange({});
   };
 
   const hasActiveFilters = Object.keys(activeFilters).length > 0;
@@ -59,7 +52,7 @@ export function DataFilters({ filters, onFiltersChange }: DataFiltersProps) {
           value={activeFilters[filter.key] || ""}
           onValueChange={(value) => handleFilterChange(filter.key, value)}
         >
-          <SelectTrigger className="h-8 w-[180px] text-sm">
+          <SelectTrigger aria-label={filter.label} className="h-8 w-[180px] text-sm">
             <SelectValue placeholder={filter.label} />
           </SelectTrigger>
           <SelectContent>

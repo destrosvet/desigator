@@ -1,3 +1,7 @@
+import { MODEL_MIME_TYPE, normalizeModelFile, validateGlb } from "@/lib/model-files";
+import { uploadFileSizeLimit } from "@/lib/media";
+import { z } from "zod";
+import { createSubmissionVersion } from "@/lib/submission-versions";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
@@ -6,8 +10,7 @@ import { db } from "@/lib/db";
 import { deleteFile, uploadFile } from "@/lib/s3";
 
 const MAX_FILES = 5;
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = new Set(["application/pdf", "application/zip", "image/jpeg", "image/png", "image/webp", "image/gif"]);
+const ALLOWED_MIME_TYPES = new Set([MODEL_MIME_TYPE, "video/mp4", "video/webm", "application/pdf", "application/zip", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -18,12 +21,15 @@ export async function POST(req: Request) {
   const formData = await req.formData();
   const taskId = formData.get("taskId");
   const content = formData.get("content");
-  const files = formData.getAll("files").filter((value): value is File => value instanceof File);
+  const stage = z.enum(["WIP", "FINAL"]).safeParse(formData.get("stage") || "FINAL");
+  const changeNote = z.string().max(2000).safeParse(formData.get("changeNote") || "");
+  if (!stage.success || !changeNote.success) return NextResponse.json({ error: "Neplatný stav nebo popis verze." }, { status: 400 });
+  const files = formData.getAll("files").filter((value): value is File => value instanceof File).map(normalizeModelFile);
 
   if (typeof taskId !== "string" || !taskId) {
     return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
   }
-  if (files.length > MAX_FILES || files.some((file) => file.size > MAX_FILE_SIZE)) {
+  if (files.length > MAX_FILES || files.some((file) => file.size > uploadFileSizeLimit(file.type))) {
     return NextResponse.json({ error: "Upload limits exceeded" }, { status: 413 });
   }
   if (files.some((file) => !ALLOWED_MIME_TYPES.has(file.type))) {
@@ -33,11 +39,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Submission cannot be empty" }, { status: 400 });
   }
 
+  for (const file of files.filter((item) => item.type === MODEL_MIME_TYPE)) {
+    const error = validateGlb(new Uint8Array(await file.arrayBuffer()));
+    if (error) return NextResponse.json({ error }, { status: 400 });
+  }
+
   const task = await db.task.findFirst({
     where: {
       id: taskId,
       status: "PUBLISHED",
-      subject: { class: { students: { some: { studentId: session.user.id } } } },
+      subject: { class: { organizationId: session.user.organizationId || "__no_organization__", students: { some: { studentId: session.user.id } } } },
     },
     select: { id: true, deadline: true },
   });
@@ -57,19 +68,10 @@ export async function POST(req: Request) {
     }
 
     const submission = await db.$transaction(async (tx) => {
-      const saved = await tx.submission.upsert({
-        where: { taskId_studentId: { taskId, studentId: session.user.id } },
-        update: {
-          content: typeof content === "string" ? content.trim() || null : null,
-          status: "SUBMITTED",
-          submittedAt: new Date(),
-        },
-        create: {
-          taskId,
-          studentId: session.user.id,
-          content: typeof content === "string" ? content.trim() || null : null,
-          status: "SUBMITTED",
-        },
+      const saved = await createSubmissionVersion(tx, {
+        taskId, studentId: session.user.id, uploadedById: session.user.id,
+        content: typeof content === "string" ? content.trim() || null : null,
+        stage: stage.data, changeNote: changeNote.data || null,
       });
 
       if (uploaded.length) {

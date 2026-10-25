@@ -14,9 +14,10 @@ export async function POST(req: Request) {
 
   try {
     const { code } = schema.parse(await req.json());
-    const targetClass = await db.class.findFirst({ where: { code, isActive: true }, select: { id: true, name: true } });
+    const targetClass = await db.class.findFirst({ where: { code, isActive: true }, select: { id: true, name: true, organizationId: true } });
     if (!targetClass) return NextResponse.json({ error: "Class not found" }, { status: 404 });
 
+    if (!session.user.organizationId || targetClass.organizationId !== session.user.organizationId) return NextResponse.json({ error: "Nejdříve přijměte pozvánku do této školy." }, { status: 403 });
     await db.classStudent.upsert({
       where: { classId_studentId: { classId: targetClass.id, studentId: session.user.id } },
       update: {},

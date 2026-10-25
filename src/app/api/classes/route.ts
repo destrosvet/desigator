@@ -1,3 +1,4 @@
+import { visibleClassScope } from "@/lib/authorization";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -22,11 +23,7 @@ export async function GET(req: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
 
-    const where: any = session.user.role === "ADMIN"
-      ? {}
-      : session.user.role === "TEACHER"
-        ? { teacherId: session.user.id }
-        : { students: { some: { studentId: session.user.id } } };
+    const where: any = { AND: [visibleClassScope(session.user)] };
     if (teacherId && session.user.role === "ADMIN") {
       where.teacherId = teacherId;
     }
@@ -72,12 +69,14 @@ export async function POST(req: Request) {
 
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
+    if (!session.user.organizationId) return NextResponse.json({ error: "Nejdříve založte školu v Nastavení nebo přijměte pozvánku." }, { status: 409 });
     const cls = await db.class.create({
       data: {
         name,
         description,
         code,
         teacherId: session.user.id,
+        organizationId: session.user.organizationId,
       },
     });
 

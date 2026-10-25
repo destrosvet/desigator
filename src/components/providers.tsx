@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemeProvider } from "next-themes";
 import { SessionProvider } from "next-auth/react";
 import { NextIntlClientProvider } from "next-intl";
 import { Toaster } from "@/components/ui/toaster";
@@ -15,11 +16,13 @@ export function Providers({
   messages: any;
 }) {
   return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange storageKey="desigator-theme">
     <SessionProvider>
       <NextIntlClientProvider locale={locale} messages={messages} timeZone="Europe/Prague">
         {children}
         <Toaster />
       </NextIntlClientProvider>
     </SessionProvider>
+    </ThemeProvider>
   );
 }

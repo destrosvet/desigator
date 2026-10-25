@@ -1,6 +1,7 @@
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
+import { UserMenu } from "@/components/user-menu";
+import { useSession } from "next-auth/react";
 import { useTranslations, useLocale } from "next-intl";
 import { usePathname } from "next/navigation";
 import {
@@ -10,7 +11,7 @@ import {
   ClipboardList,
   Settings,
   GraduationCap,
-  LogOut,
+  ChartColumn,
   Menu,
   ChevronRight,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/tasks", icon: ClipboardList, label: "navigation.tasks", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
   { href: "/students", icon: Users, label: "navigation.students", roles: ["ADMIN", "TEACHER"] },
   { href: "/evaluations", icon: GraduationCap, label: "navigation.evaluations", roles: ["ADMIN", "TEACHER", "EVALUATOR"] },
+  { href: "/statistics", icon: ChartColumn, label: "navigation.statistics", roles: ["ADMIN", "TEACHER"] },
   { href: "/settings", icon: Settings, label: "navigation.settings", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
 ];
 
@@ -45,27 +47,28 @@ export function AppShell({ children, compact = false }: { children: React.ReactN
 
   const navContent = (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 py-6">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+      <div className="flex items-center gap-3 px-6 pb-8 pt-7">
+        <div className="brand-mark size-10 bg-primary rounded-2xl shadow-sm flex items-center justify-center">
           <GraduationCap className="w-5 h-5 text-primary-foreground" />
         </div>
-        <span className="font-bold text-lg">Desigator</span>
+        <div><span className="font-bold text-xl tracking-tight">Desigator<span className="text-primary">.</span></span><p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{locale === "en" ? "Creative classroom" : "Prostor pro tvorbu"}</p></div>
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
+      <nav aria-label={locale === "en" ? "Main navigation" : "Hlavní navigace"} className="flex-1 space-y-1.5 px-4">
         {filteredNav.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname?.includes(item.href);
+          const isActive = pathname === "/" + locale + item.href || pathname?.startsWith("/" + locale + item.href + "/");
           return (
             <Link
               key={item.href}
+              aria-current={isActive ? "page" : undefined}
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "nav-active bg-sidebar-accent text-sidebar-accent-foreground shadow-xs ring-1 ring-primary/10"
+                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
               )}
             >
               <Icon className="w-4 h-4" />
@@ -76,55 +79,35 @@ export function AppShell({ children, compact = false }: { children: React.ReactN
         })}
       </nav>
 
-      <div className="p-4 border-t">
-        <div className="flex items-center gap-3 mb-3 px-2">
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-            {session?.user?.name?.charAt(0) || "?"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{session?.user?.name}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {session?.user?.email}
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => signOut({ callbackUrl: `/${locale}/auth/login` })}
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          {t("navigation.logout")}
-        </Button>
-      </div>
+
     </div>
   );
 
   return (
     <div className="min-h-screen flex">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col border-r bg-card">
+      <aside className="app-sidebar sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r bg-sidebar lg:flex">
         {navContent}
       </aside>
 
       {/* Mobile Sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild className="lg:hidden">
-          <Button variant="ghost" size="icon" className="absolute top-4 left-4 z-50">
+          <Button variant="ghost" size="icon" className="absolute top-3 left-4 z-50" aria-label={locale === "en" ? "Open navigation" : "Otevřít navigaci"}>
             <Menu className="w-5 h-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side="left" className="app-sidebar w-64 bg-sidebar p-0">
           {navContent}
         </SheetContent>
       </Sheet>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className={cn("border-b items-center px-4 lg:px-8", compact ? "hidden" : "h-14 flex")}>
-          <div className="lg:hidden w-8" /> {/* spacer for mobile menu button */}
+        <header className={cn("border-b items-center px-4 lg:px-8", compact ? "hidden" : "h-16 flex justify-between bg-card/70 backdrop-blur-md")}>
+          <div className="flex items-center gap-3"><div className="w-8 lg:hidden" /><span className="text-sm font-semibold">{t(filteredNav.find((item) => pathname === "/" + locale + item.href || pathname?.startsWith("/" + locale + item.href + "/"))?.label || "navigation.dashboard")}</span></div><UserMenu />
         </header>
-        <div className={cn("flex-1 overflow-auto", compact ? "p-3 lg:p-4" : "p-4 lg:p-8")}>{children}</div>
+        <div className={cn("app-content flex-1 overflow-auto", compact ? "p-3 lg:p-4" : "p-4 lg:p-8")}>{children}</div>
       </main>
     </div>
   );

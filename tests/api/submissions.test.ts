@@ -30,6 +30,11 @@ describe("POST /api/submissions", () => {
     mocks.getServerSession.mockResolvedValue({ user: { id: "student-1", role: "STUDENT" } });
   });
 
+  it("rejects malformed GLB before writing to storage", async () => {
+    const data = new FormData(); data.set("taskId", "task-1"); data.append("files", new File(["invalid model"], "work.glb", { type: "application/octet-stream" }));
+    expect((await POST(requestWith(data))).status).toBe(400); expect(mocks.uploadFile).not.toHaveBeenCalled(); expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it("rejects users who are not students", async () => {
     mocks.getServerSession.mockResolvedValue({ user: { id: "teacher-1", role: "TEACHER" } });
     const response = await POST(requestWith(new FormData()));
@@ -60,7 +65,7 @@ describe("POST /api/submissions", () => {
   it("stores an eligible text submission transactionally", async () => {
     mocks.taskFindFirst.mockResolvedValue({ id: "task-1", deadline: new Date(Date.now() + 60_000) });
     mocks.transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
-      submission: { upsert: vi.fn().mockResolvedValue({ id: "submission-1" }) },
+      submission: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: "submission-1" }) },
       attachment: { createMany: vi.fn() },
     }));
     const data = new FormData();

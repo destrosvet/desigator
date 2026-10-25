@@ -12,6 +12,11 @@ function save(scores: Array<{ criterionId: string; points: number }>) {
 }
 
 describe("completed evaluation validation", () => {
+  it("refuses changing published scores before any mutation", async () => {
+    const remove=vi.fn(); mocks.transaction.mockImplementation(async run=>run({$queryRaw:vi.fn().mockResolvedValue([{resultsPublishedAt:new Date()}]),criterionScore:{deleteMany:remove}}));
+    expect((await save([{criterionId:"composition",points:50},{criterionId:"craft",points:50}])).status).toBe(409);expect(remove).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ user: { id: "reviewer", role: "EVALUATOR" } });

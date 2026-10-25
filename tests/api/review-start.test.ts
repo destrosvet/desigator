@@ -1,0 +1,11 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const m=vi.hoisted(()=>({session:vi.fn(),manage:vi.fn(),transaction:vi.fn(),lock:vi.fn(),task:vi.fn(),versions:vi.fn(),upsert:vi.fn(),update:vi.fn()}));
+vi.mock("next-auth",()=>({getServerSession:m.session})); vi.mock("@/lib/auth",()=>({authOptions:{}})); vi.mock("@/lib/authorization",()=>({canManageTask:m.manage})); vi.mock("@/lib/db",()=>({db:{$transaction:m.transaction}}));
+import { POST } from "@/app/api/tasks/[id]/review-start/route";
+function request(){return POST(new Request("http://localhost/api/tasks/t/review-start",{method:"POST"}),{params:Promise.resolve({id:"t"})});}
+describe("start reviewing from a class task",()=>{
+ beforeEach(()=>{vi.resetAllMocks();m.session.mockResolvedValue({user:{id:"teacher",role:"TEACHER"}});m.manage.mockResolvedValue(true);m.task.mockResolvedValue({criteria:[{maxPoints:100}],maxPoints:100});m.transaction.mockImplementation(async run=>run({$queryRaw:m.lock,task:{findUnique:m.task},submission:{findMany:m.versions,update:m.update},evaluation:{upsert:m.upsert}}));});
+ it("requires ownership before starting a transaction",async()=>{m.manage.mockResolvedValue(false);expect((await request()).status).toBe(403);expect(m.transaction).not.toHaveBeenCalled();});
+ it("excludes WIP and earlier final versions and resumes unfinished grading",async()=>{m.versions.mockResolvedValue([{id:"a2",studentId:"a",stage:"WIP",_count:{attachments:1}},{id:"a1",studentId:"a",stage:"FINAL",_count:{attachments:2}},{id:"b1",studentId:"b",stage:"FINAL",_count:{attachments:2}},{id:"c1",studentId:"c",stage:"FINAL",_count:{attachments:2}}]);m.upsert.mockResolvedValueOnce({id:"done",status:"COMPLETED"}).mockResolvedValueOnce({id:"pending",status:"PENDING"});const response=await request();expect(response.status).toBe(200);expect(await response.json()).toEqual({evaluationId:"pending",count:2});expect(m.upsert.mock.calls.map(call=>call[0].create.submissionId)).toEqual(["b1","c1"]);expect(m.update).toHaveBeenCalledTimes(1);expect(m.upsert.mock.calls.every(call=>Object.keys(call[0].update).length===0)).toBe(true);});
+ it("does not create evaluations when only WIP exists",async()=>{m.versions.mockResolvedValue([{id:"w",studentId:"a",stage:"WIP",_count:{attachments:1}}]);expect((await request()).status).toBe(409);expect(m.upsert).not.toHaveBeenCalled();});
+});

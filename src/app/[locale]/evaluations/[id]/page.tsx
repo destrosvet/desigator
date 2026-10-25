@@ -1,3 +1,4 @@
+import { canEvaluate, isAdmin } from "@/lib/permissions";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -34,5 +35,5 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
     orderBy: [{ submission: { student: { name: "asc" } } }, { id: "asc" }],
   });
 
-  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(evaluation))} queue={queue} role={session.user.role} />;
+  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(evaluation))} queue={queue} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
 }

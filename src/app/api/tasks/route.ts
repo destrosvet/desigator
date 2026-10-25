@@ -1,3 +1,8 @@
+import { isAdmin, isSchoolAdmin } from "@/lib/permissions";
+import { visibleTaskScope, managedTaskScope } from "@/lib/authorization";
+import { readTableSort, sortTableRows } from "@/lib/table-sorting";
+import type { Prisma } from "@prisma/client";
+import { criteriaInputSchema, rubricError } from "@/lib/task-validation";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -6,17 +11,13 @@ import { z } from "zod";
 import { canManageSubject } from "@/lib/authorization";
 
 const taskSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  instructions: z.string().optional(),
-  maxPoints: z.number().min(1).default(100),
-  deadline: z.string().optional(),
-  subjectId: z.string(),
-  criteria: z.array(z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    maxPoints: z.number(),
-  })).optional(),
+  title: z.string().trim().min(1).max(300),
+  description: z.string().max(20000).optional(),
+  instructions: z.string().max(20000).optional(),
+  maxPoints: z.number().int().min(1).max(10000).default(100),
+  deadline: z.string().datetime().nullable().optional(),
+  subjectId: z.string().min(1),
+  criteria: criteriaInputSchema.optional(),
 });
 
 export async function GET(req: Request) {
@@ -30,29 +31,10 @@ export async function GET(req: Request) {
     const subjectName = searchParams.get("subjectName");
     const status = searchParams.get("status");
 
-    const where: any = {};
+    const where: any = { AND: [visibleTaskScope(session.user)] };
     if (status) where.status = status;
-
-    if (session.user.role === "ADMIN") {
-      // Admin vidí vše
-    } else if (session.user.role === "TEACHER") {
-      where.creatorId = session.user.id;
-    } else if (session.user.role === "EVALUATOR") {
-      where.submissions = { some: { evaluations: { some: { evaluatorId: session.user.id } } } };
-    } else {
-      // STUDENT – tasky z předmětů jeho tříd
-      const classIds = await db.classStudent.findMany({
-        where: { studentId: session.user.id },
-        select: { classId: true },
-      });
-      const subjects = await db.subject.findMany({
-        where: { classId: { in: classIds.map(c => c.classId) } },
-        select: { id: true },
-      });
-      where.subject = { id: { in: subjects.map(s => s.id) } };
-      where.status = "PUBLISHED";
-    }
-
+    const classId = searchParams.get("classId");
+    if (classId) where.subject = { ...(where.subject || {}), classId };
     if (subjectName) {
       where.subject = { ...(where.subject || {}), name: subjectName };
     }
@@ -60,8 +42,9 @@ export async function GET(req: Request) {
     const search = searchParams.get("search");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
-    const sort = searchParams.get("sort");
-    const order = searchParams.get("order") || "desc";
+    const sorting = readTableSort(searchParams, ["title", "subject", "class", "deadline", "status", "submissions"]);
+    const computedSort = sorting?.key === "submissions";
+    const order = sorting?.direction ?? "desc";
 
     if (search) {
       where.OR = [
@@ -71,24 +54,28 @@ export async function GET(req: Request) {
     }
 
     const skip = (page - 1) * limit;
-    const orderBy: any = sort ? { [sort]: order } : { createdAt: "desc" };
+    const sortOptions: Record<string, Prisma.TaskOrderByWithRelationInput> = { title: { title: order }, subject: { subject: { name: order } }, class: { subject: { class: { name: order } } }, deadline: { deadline: { sort: order, nulls: "last" } }, status: { status: order } };
+    const orderBy: Prisma.TaskOrderByWithRelationInput[] = [sorting && !computedSort ? sortOptions[sorting.key] : { createdAt: "desc" }, { id: "asc" }];
 
     const [tasks, total] = await Promise.all([
       db.task.findMany({
         where,
         include: {
           creator: { select: { name: true } },
-          subject: { select: { name: true, class: { select: { name: true } } } },
-          _count: { select: { submissions: true } },
+          subject: { select: { name: true, class: { select: { name: true, organizationId: true, _count: { select: { students: true } } } } } },
+          submissions: { where: session.user.role === "STUDENT" ? { studentId: session.user.id } : { OR: [{ task: managedTaskScope(session.user) }, { evaluations: { some: { evaluatorId: session.user.id } } }] }, select: { studentId: true }, distinct: ["studentId"] },
+          _count: { select: { submissions: { where: session.user.role === "STUDENT" ? { studentId: session.user.id } : { OR: [{ task: managedTaskScope(session.user) }, { evaluations: { some: { evaluatorId: session.user.id } } }] } } } },
         },
         orderBy,
-        skip,
-        take: limit,
+        skip: computedSort ? undefined : skip,
+        take: computedSort ? undefined : limit,
       }),
       db.task.count({ where }),
     ]);
 
-    return NextResponse.json({ tasks, total, page, limit });
+    const summaries = tasks.map(({ submissions, ...task }) => ({ ...task, submissionCount: submissions.length, studentCount: isAdmin(session.user) || (task.subject.class.organizationId === session.user.organizationId && (isSchoolAdmin(session.user) || task.creatorId === session.user.id)) ? task.subject.class._count.students : submissions.length }));
+    const ordered = computedSort ? sortTableRows(summaries, sorting, (row) => row.submissionCount).slice(skip, skip + limit) : summaries;
+    return NextResponse.json({ tasks: ordered, total, page, limit });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
   }
@@ -108,6 +95,9 @@ export async function POST(req: Request) {
     }
 
 
+    const error = rubricError(criteria || [], maxPoints);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+    if (criteria?.some((criterion) => criterion.id)) return NextResponse.json({ error: "Nová kritéria nesmí přebírat cizí ID." }, { status: 400 });
     const task = await db.task.create({
       data: {
         title,
@@ -117,7 +107,7 @@ export async function POST(req: Request) {
         deadline: deadline ? new Date(deadline) : null,
         creatorId: session.user.id,
         subjectId,
-        criteria: criteria ? { create: criteria } : undefined,
+        criteria: criteria ? { create: criteria.map(({ id: _id, ...criterion }, order) => ({ ...criterion, order })) } : undefined,
       },
       include: { criteria: true },
     });

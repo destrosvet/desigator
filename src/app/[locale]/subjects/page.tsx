@@ -1,8 +1,11 @@
 "use client";
+import type { TableSort } from "@/lib/table-sorting";
+import { mutateAdminRows } from "@/lib/admin-client";
 
-import { startTransition, useEffect, useState } from "react";
+
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -41,18 +44,21 @@ const semesterLabels: Record<string, string> = {
 };
 
 const semesterColors: Record<string, string> = {
-  FULL_YEAR: "bg-blue-100 text-blue-800",
-  SUMMER: "bg-green-100 text-green-800",
-  WINTER: "bg-orange-100 text-orange-800",
+  FULL_YEAR: "bg-blue-100 text-blue-800 dark:bg-blue-400/15 dark:text-blue-200",
+  SUMMER: "bg-green-100 text-green-800 dark:bg-emerald-400/15 dark:text-emerald-200",
+  WINTER: "bg-orange-100 text-orange-800 dark:bg-orange-400/15 dark:text-orange-200",
 };
 
 export default function SubjectsPage() {
   const t = useTranslations("common");
   const { data: session } = useSession();
   const router = useRouter();
+  const locale = useLocale();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [total, setTotal] = useState(0);
+  const fetchVersion = useRef(0);
+  const [sort, setSort] = useState<TableSort>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState("");
@@ -82,30 +88,33 @@ export default function SubjectsPage() {
       .catch(console.error);
   }, []);
 
-  const fetchSubjects = async () => {
+  const fetchSubjects = useCallback(async () => {
+    const version = ++fetchVersion.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("page", page.toString());
       params.set("limit", limit.toString());
+      if (sort) { params.set("sort", sort.key); params.set("order", sort.direction); }
       if (search) params.set("search", search);
       Object.entries(activeFilters).forEach(([key, value]) => {
         if (value) params.set(key, value);
       });
       const res = await fetch(`/api/subjects?${params}`);
       const data = await res.json();
+      if (version !== fetchVersion.current) return;
       setSubjects(data.subjects || []);
       setTotal(data.total || 0);
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      if (version === fetchVersion.current) setLoading(false);
     }
-  };
+  }, [page, limit, search, activeFilters, sort]);
 
   useEffect(() => {
     startTransition(() => { void fetchSubjects(); });
-  }, [page, limit, search, activeFilters]);
+  }, [fetchSubjects]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -167,7 +176,7 @@ export default function SubjectsPage() {
   ];
 
   const actions = (s: Subject) => [
-    { label: "Upravit", onClick: () => router.push(`/subjects/${s.id}`) },
+    { label: "Upravit", onClick: () => router.push(`/${locale}/subjects/${s.id}`) },
     { label: "Tasky", onClick: () => router.push(`/subjects/${s.id}/tasks`) },
   ];
 
@@ -223,7 +232,8 @@ export default function SubjectsPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <DataTable
+            <DataTable tableId="subjects" sort={sort} onSortChange={setSort}
+              onDeleteRows={canCreate ? async (ids) => { await mutateAdminRows("subjects", ids); await fetchSubjects(); } : undefined}
               data={subjects}
               columns={columns}
               total={total}

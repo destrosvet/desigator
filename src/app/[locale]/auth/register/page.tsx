@@ -43,7 +43,9 @@ export default function RegisterPage() {
       } else {
         setSuccess(true);
         setTimeout(() => {
-          router.push(`/${locale}/auth/login`);
+          const callback = new URLSearchParams(window.location.search).get("callbackUrl");
+          const suffix = callback?.startsWith("/" + locale + "/invitations/") ? "?callbackUrl=" + encodeURIComponent(callback) : "";
+          router.push(`/${locale}/auth/login` + suffix);
         }, 2000);
       }
     } catch {

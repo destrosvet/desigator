@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import sharp from 'sharp';
@@ -16,37 +17,33 @@ function artwork(i:number, view:number) {
  ];
  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900"><rect width="1200" height="900" fill="${bg}"/><g font-family="sans-serif" ${view?'transform="translate(-200 -130) scale(1.5)"':''}>${patterns[i%6]}</g></svg>`;
 }
-async function main(){
- if(!process.env.DATABASE_URL?.includes('/desigator_audit') || process.env.S3_BUCKET!=='desigator-audit') throw Error('Only isolated demo environment allowed');
- const teacher=await db.user.findUniqueOrThrow({where:{email:'teacher@desigator.cz'}});
- const evaluator=await db.user.findUniqueOrThrow({where:{email:'evaluator@desigator.cz'}});
- const current=await db.task.findUniqueOrThrow({where:{id:'cmvh3wtjc0001euygvyy9ggx9'},include:{subject:true}});
- const subjects=await db.subject.findMany({where:{teacherId:teacher.id}});
- const tasks=[current];
- for(const [index,title] of ['Plakát pro designový festival','Vizuální identita značky Botanica','Prostorová studie – objekt a světlo'].entries()){
-  const subject=subjects.find(s=>s.name===(index===2?'3D modelování a animace':'Grafický design'))||current.subject;
-  let task=await db.task.findFirst({where:{title,subjectId:subject.id},include:{subject:true}});
-  if(!task) task=await db.task.create({data:{title,subjectId:subject.id,creatorId:teacher.id,status:'PUBLISHED',description:'Ukázkový úkol s různými návrhy pro vyzkoušení hodnoticího prostředí.',maxPoints:100,criteria:{create:[{name:'Vizuální řešení',maxPoints:60,order:0},{name:'Technické provedení',maxPoints:40,order:1}]}},include:{subject:true}});
-  tasks.push(task);
- }
- const names=['Anna Nováková','Adam Dvořák','Eliška Veselá','Tomáš Černý','Tereza Procházková','Jakub Kučera','Sofie Malá','Matěj Svoboda','Klára Benešová','Daniel Urban','Nela Pokorná','Filip Hájek'];
- const password=await bcrypt.hash('student123',12);let works=0;
- for(let i=0;i<names.length;i++){
-  const email=`mock.student${i+1}@desigator.cz`;
-  const student=await db.user.upsert({where:{email},update:{},create:{email,name:names[i],password,role:'STUDENT'}});
-  for(let t=0;t<tasks.length;t++){
-   const task=tasks[t];
+async function main() {
+ const url = new URL(process.env.DATABASE_URL || "");
+ if(url.pathname !== '/desigator_preview' || process.env.S3_BUCKET !== 'desigator-preview' || !['127.0.0.1','localhost'].includes(url.hostname)) throw Error('Only local desigator_preview environment is allowed');
+ const teacher = await db.user.findUniqueOrThrow({where:{email:'teacher@desigator.cz'}});
+ const tasks = await db.task.findMany({where:{creatorId:teacher.id,title:{in:['Digitální ilustrace – geometrická kompozice','Vizuální identita kulturní akce']}},include:{subject:true}});
+ if(tasks.length !== 2) throw Error('Expected seeded design tasks');
+ const names=['Anna Nováková','Adam Dvořák','Eliška Veselá','Tomáš Černý','Tereza Procházková','Jakub Kučera','Sofie Malá','Matěj Svoboda'];
+ const password=await bcrypt.hash('student123',12); let files=0; let reviews=0;
+ for(const [index,name] of names.entries()) {
+  const student=await db.user.upsert({where:{email:'mock.student'+(index+1)+'@desigator.cz'},update:{},create:{name,email:'mock.student'+(index+1)+'@desigator.cz',password,role:'STUDENT',roles:['STUDENT'],organizationId:teacher.organizationId,externalId:'MOCK'+String(index+1).padStart(3,'0')}});
+  for(const [taskIndex,task] of tasks.entries()) {
    await db.classStudent.upsert({where:{classId_studentId:{classId:task.subject.classId,studentId:student.id}},update:{},create:{classId:task.subject.classId,studentId:student.id}});
-   const submission=await db.submission.upsert({where:{taskId_studentId:{taskId:task.id,studentId:student.id}},update:{},create:{taskId:task.id,studentId:student.id,status:'UNDER_REVIEW',content:'Ukázkový návrh – hlavní pohled a detail zpracování.'}});
-   for(let v=0;v<2;v++){
-    const key=`mockups/${task.id}/${student.id}/view-${v}.png`;
-    if(await db.attachment.findUnique({where:{s3Key:key}}))continue;
-    const buffer=await sharp(Buffer.from(artwork(i+t*3,v))).png().toBuffer();await uploadFile(key,buffer,'image/png');
-    await db.attachment.create({data:{filename:`view-${v}.png`,originalName:v?'Detail návrhu.png':'Hlavní návrh.png',mimeType:'image/png',size:buffer.length,s3Key:key,s3Url:'/api/uploads',submissionId:submission.id}});
+   for(const version of index===names.length-1 ? [1] : [1,2]) {
+    const stage=version===1?'WIP':'FINAL';
+    const work=await db.submission.upsert({where:{taskId_studentId_version:{taskId:task.id,studentId:student.id,version}},update:{},create:{taskId:task.id,studentId:student.id,version,stage,uploadedById:teacher.id,status:stage==='FINAL'?'UNDER_REVIEW':'SUBMITTED',changeNote:stage==='WIP'?'První návrh ke konzultaci.':'Dopracované vizuální řešení a detail.',content:'Demonstrační práce pro vyzkoušení hodnocení. Nejde o skutečnou studentskou práci.'}});
+    for(let view=0;view<(version===1?1:2);view++) {
+     const key='demo-review/'+task.id+'/'+student.id+'/v'+version+'-'+view+'.png';
+     if(await db.attachment.findUnique({where:{s3Key:key}})) continue;
+     const source=sharp(Buffer.from(artwork(index+taskIndex*3,view)));
+     const buffer=await(version===1?source.blur(2):source).png().toBuffer(); const id=randomUUID();
+     await uploadFile(key,buffer,'image/png');
+     await db.attachment.create({data:{id,filename:'navrh-'+view+'.png',originalName:version===1?'Rozpracovaný návrh.png':view?'Detail zpracování.png':'Finální návrh.png',mimeType:'image/png',size:buffer.length,s3Key:key,s3Url:'/api/uploads/'+id,submissionId:work.id}}); files++;
+    }
+    if(stage==='FINAL') {await db.evaluation.upsert({where:{submissionId_evaluatorId:{submissionId:work.id,evaluatorId:teacher.id}},update:{},create:{submissionId:work.id,evaluatorId:teacher.id}});reviews++;}
    }
-   await db.evaluation.upsert({where:{submissionId_evaluatorId:{submissionId:submission.id,evaluatorId:evaluator.id}},update:{},create:{submissionId:submission.id,evaluatorId:evaluator.id}});works++;
   }
  }
- console.log(JSON.stringify({tasks:tasks.map(t=>({id:t.id,title:t.title})),works,views:works*2}));
+ console.log(JSON.stringify({students:names.length,tasks:tasks.map(task=>({id:task.id,title:task.title})),teacherReviews:reviews,newFiles:files}));
 }
 main().finally(()=>db.$disconnect());

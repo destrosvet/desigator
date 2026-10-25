@@ -1,3 +1,6 @@
+import { visibleSubjectScope, visibleTaskScope } from "@/lib/authorization";
+import { readTableSort } from "@/lib/table-sorting";
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -27,16 +30,10 @@ export async function GET(req: Request) {
     const search = searchParams.get("search");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
-    const sort = searchParams.get("sort");
-    const order = searchParams.get("order") || "desc";
+    const sorting = readTableSort(searchParams, ["code", "name", "class", "semester", "year", "teacher", "tasks"]);
+    const order = sorting?.direction ?? "desc";
 
-    const where: any = session.user.role === "ADMIN"
-      ? {}
-      : session.user.role === "TEACHER"
-        ? { teacherId: session.user.id }
-        : session.user.role === "STUDENT"
-          ? { class: { students: { some: { studentId: session.user.id } } } }
-          : { tasks: { some: { submissions: { some: { evaluations: { some: { evaluatorId: session.user.id } } } } } } };
+    const where: any = { AND: [visibleSubjectScope(session.user)] };
     if (classId) where.classId = classId;
     if (year) where.year = parseInt(year);
     if (semester) where.semester = semester;
@@ -49,7 +46,8 @@ export async function GET(req: Request) {
     }
 
     const skip = (page - 1) * limit;
-    const orderBy: any = sort ? { [sort]: order } : { year: "desc" };
+    const sortOptions: Record<string, Prisma.SubjectOrderByWithRelationInput> = { code: { code: order }, name: { name: order }, class: { class: { name: order } }, semester: { semester: order }, year: { year: order }, teacher: { teacher: { name: order } }, tasks: { tasks: { _count: order } } };
+    const orderBy: Prisma.SubjectOrderByWithRelationInput[] = [sorting ? sortOptions[sorting.key] : { year: "desc" }, { id: "asc" }];
 
     const [subjects, total] = await Promise.all([
       db.subject.findMany({
@@ -57,7 +55,7 @@ export async function GET(req: Request) {
         include: {
           class: { select: { name: true } },
           teacher: { select: { name: true } },
-          _count: { select: { tasks: true } },
+          _count: { select: { tasks: { where: visibleTaskScope(session.user) } } },
         },
         orderBy,
         skip,

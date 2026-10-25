@@ -1,0 +1,14 @@
+import { beforeEach,describe,it,expect,vi } from 'vitest';
+const m=vi.hoisted(()=>({session:vi.fn(),subject:vi.fn(),course:vi.fn(),organization:vi.fn(),teacher:vi.fn()}));
+vi.mock('next-auth',()=>({getServerSession:m.session}));vi.mock('@/lib/auth',()=>({authOptions:{}}));
+vi.mock('@/lib/db',()=>({db:{subject:{findMany:m.subject},historicalCourse:{findMany:m.course},organization:{findMany:m.organization},user:{findMany:m.teacher}}}));
+import { GET } from '@/app/api/statistics/options/route';
+const req=(query:string)=>new Request('http://localhost/api/statistics/options?'+query);
+describe('statistics search',()=>{
+ beforeEach(()=>{vi.resetAllMocks();m.session.mockResolvedValue({user:{id:'admin',role:'ADMIN',roles:['ADMIN']}});m.subject.mockResolvedValue([]);m.course.mockResolvedValue([]);m.organization.mockResolvedValue([]);m.teacher.mockResolvedValue([]);});
+ it('bounds school results without preloading a huge list',async()=>{m.organization.mockResolvedValue(Array.from({length:21},(_,i)=>({id:String(i),name:'School '+i})));const response=await GET(req('kind=organization&search=School'));const data=await response.json();expect(data.options).toHaveLength(20);expect(data.hasMore).toBe(true);expect(m.organization).toHaveBeenCalledWith(expect.objectContaining({take:21}));expect(response.headers.get('Cache-Control')).toBe('no-store');});
+ it('combines subject code and year tokens and respects the historical source',async()=>{await GET(req('kind=subject&source=historical&search=YPG%202013&organizationId=a'));expect(m.subject).not.toHaveBeenCalled();const where=m.course.mock.calls[0][0].where;expect(JSON.stringify(where)).toContain('YPG');expect(JSON.stringify(where)).toContain('2013');expect(JSON.stringify(where)).toContain('organizationId');expect(m.course.mock.calls[0][0].take).toBe(21);});
+ it('scopes teacher subject search to owned courses in their school',async()=>{m.session.mockResolvedValue({user:{id:'t',role:'TEACHER',roles:['TEACHER'],organizationId:'a'}});expect((await GET(req('kind=subject&source=historical'))).status).toBe(200);expect(m.course.mock.calls[0][0].where.AND[0]).toEqual({teacherId:'t',import:{organizationId:'a'}});});
+ it('rejects cross-school searches and teacher-directory access for ordinary teachers',async()=>{m.session.mockResolvedValue({user:{id:'t',role:'TEACHER',roles:['TEACHER'],organizationId:'a'}});expect((await GET(req('kind=subject&organizationId=b'))).status).toBe(403);expect((await GET(req('kind=teacher&organizationId=a'))).status).toBe(403);expect((await GET(req('kind=organization'))).status).toBe(403);expect(m.teacher).not.toHaveBeenCalled();});
+ it('does not expose options to students or evaluators',async()=>{m.session.mockResolvedValue({user:{id:'e',role:'EVALUATOR',roles:['EVALUATOR']}});expect((await GET(req('kind=subject'))).status).toBe(403);});
+});

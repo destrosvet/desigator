@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { mutateAdminRows } from "@/lib/admin-client";
+import { useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
@@ -44,8 +46,13 @@ const semesterLabels: Record<string, string> = {
 export default function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const locale = useLocale();
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskLimit, setTaskLimit] = useState(20);
   const [subject, setSubject] = useState<SubjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [id, setId] = useState("");
 
@@ -91,13 +98,9 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const handleDelete = async () => {
-    if (!confirm("Opravdu chcete smazat tento předmět?")) return;
-    try {
-      const res = await fetch(`/api/subjects/${id}`, { method: "DELETE" });
-      if (res.ok) router.push("/subjects");
-    } catch (error) {
-      console.error(error);
-    }
+    if (!confirm("Opravdu smazat tento předmět? Předmět s navázanými zadáními nelze smazat.")) return;
+    try { await mutateAdminRows("subjects", [id]); router.push(`/${locale}/subjects`); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Smazání selhalo."); }
   };
 
   const canEdit = session?.user?.role === "ADMIN" || session?.user?.role === "TEACHER";
@@ -122,6 +125,7 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
     );
   }
 
+  const filteredTasks = subject.tasks.filter((task) => task.title.toLocaleLowerCase().includes(taskSearch.toLocaleLowerCase()));
   const taskColumns = [
     { key: "title", label: "Název", render: (t: Task) => <span className="font-medium">{t.title}</span> },
     { key: "maxPoints", label: "Max bodů" },
@@ -131,12 +135,13 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
   ];
 
   const taskActions = (t: Task) => [
-    { label: "Otevřít", onClick: () => router.push(`/tasks/${t.id}`) },
+    { label: "Otevřít", onClick: () => router.push(`/${locale}/tasks/${t.id}`) },
   ];
 
   return (
     <AppShell>
       <div className="max-w-4xl mx-auto space-y-6">
+        {message ? <p role="alert" className="text-destructive">{message}</p> : null}
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => router.push("/subjects")}>
             <ArrowLeft className="w-4 h-4 mr-2" />Zpět
@@ -153,6 +158,8 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
         </div>
+
+        <Button variant="outline" onClick={() => router.push(`/${locale}/subjects/${id}/results`)}><ClipboardList className="size-4" />Přehled výsledků a známek</Button>
 
         <Card>
           <CardHeader><CardTitle>Detail předmětu</CardTitle></CardHeader>
@@ -203,15 +210,16 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <DataTable
-              data={subject.tasks || []}
+            <DataTable tableId="subject-tasks" clientPagination
+              onDeleteRows={canEdit ? async (ids) => { await mutateAdminRows("tasks", ids); await fetchSubject(id); } : undefined}
+              data={filteredTasks}
               columns={taskColumns}
-              total={subject.tasks?.length || 0}
-              page={1}
-              limit={subject.tasks?.length || 0}
-              onSearch={() => {}}
-              onPageChange={() => {}}
-              onLimitChange={() => {}}
+              total={filteredTasks.length}
+              page={taskPage}
+              limit={taskLimit}
+              onSearch={setTaskSearch}
+              onPageChange={setTaskPage}
+              onLimitChange={setTaskLimit}
               actions={taskActions}
               onRowClick={(t) => router.push(`/tasks/${t.id}`)}
             />

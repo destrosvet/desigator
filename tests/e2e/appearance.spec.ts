@@ -1,0 +1,48 @@
+import { expect, test } from "@playwright/test";
+import { teacherStatePath } from "./auth-setup";
+test.skip(process.env.E2E_WORKFLOW !== "true", "Requires isolated seeded database");
+test("appearance supports light, dark and system modes across reloads and mobile navigation", async ({ browser, baseURL }, testInfo) => {
+  const context = await browser.newContext({ baseURL, storageState: teacherStatePath, colorScheme: "light", viewport: { width: 1440, height: 1000 } });
+  try {
+    const page = await context.newPage(); const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("/cs/subjects"); await expect(page.getByRole("heading", { name: "Předměty", exact: true })).toBeVisible(); await expect(page.locator("header").getByRole("button", { name: "Uživatelské menu", exact: true })).toBeVisible();
+    await expect(page.locator("aside").getByText("teacher@desigator.cz", { exact: true })).toHaveCount(0);
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+    await page.screenshot({ path: testInfo.outputPath("subjects-light.png"), fullPage: true, animations: "disabled" });
+    await page.getByRole("button", { name: "Uživatelské menu", exact: true }).click();
+    await expect(page.getByRole("menu").getByText("teacher@desigator.cz", { exact: true })).toBeVisible();
+    await page.getByRole("menuitemradio", { name: "Tmavý", exact: true }).click();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("desigator-theme"))).toBe("dark");
+    await page.reload(); await expect(page.locator("html")).toHaveClass(/dark/); await expect(page.getByRole("heading", { name: "Předměty", exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("subjects-dark.png"), fullPage: true, animations: "disabled" });
+    await page.goto("/cs/settings?section=appearance"); await expect(page.getByRole("button", { name: "Tmavý", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Podle systému", exact: true }).click();
+    await page.emulateMedia({ colorScheme: "light" }); await expect(page.locator("html")).not.toHaveClass(/dark/);
+    await page.emulateMedia({ colorScheme: "dark" }); await expect(page.locator("html")).toHaveClass(/dark/);
+    await page.getByRole("button", { name: "Světlý", exact: true }).click(); await expect(page.locator("html")).not.toHaveClass(/dark/);
+    await page.getByRole("button", { name: "Tmavý", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/cs/subjects");
+    await expect(page.locator("header").getByRole("button", { name: "Uživatelské menu", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Uživatelské menu", exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath("user-menu-mobile.png"), fullPage: true, animations: "disabled" });
+    await page.getByRole("menuitemradio", { name: "Světlý", exact: true }).click();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+    await page.getByRole("button", { name: "Otevřít navigaci", exact: true }).click();
+    await expect(page.getByRole("dialog").getByRole("button", { name: /Zapnout.*režim/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.screenshot({ path: testInfo.outputPath("subjects-mobile.png"), fullPage: true, animations: "disabled" });
+    await page.getByRole("button", { name: "Uživatelské menu", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("menuitem", { name: "Můj profil", exact: true }).click();
+    await expect(page).toHaveURL(/settings\?section=profile/);
+    await page.goto("/en/subjects");
+    await page.getByRole("button", { name: "User menu", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "My profile", exact: true })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/en\/auth\/login/);
+    expect((await (await page.request.get("/api/auth/session")).json()).user).toBeUndefined();
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});

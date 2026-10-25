@@ -1,7 +1,8 @@
+import { studentPublishedEvaluations } from "@/lib/result-publication";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { canViewTask } from "@/lib/authorization";
+import { canManageTask, canViewTask } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { TaskDetailClient } from "./task-detail-client";
 
@@ -11,19 +12,20 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
   if (!session) redirect(`/${locale}/auth/login`);
   if (!(await canViewTask(session.user, id))) notFound();
 
+  const canManage = await canManageTask(session.user, id);
   const task = await db.task.findUnique({
     where: { id },
     include: {
-      subject: { select: { name: true, class: { select: { name: true } } } },
+      subject: { select: { classId: true, name: true, class: { select: { name: true } } } },
       criteria: { orderBy: { order: "asc" } },
       submissions: {
         where: session.user.role === "STUDENT" ? { studentId: session.user.id }
-          : session.user.role === "EVALUATOR" ? { evaluations: { some: { evaluatorId: session.user.id } } } : undefined,
+          : !canManage ? { evaluations: { some: { evaluatorId: session.user.id } } } : undefined,
         include: {
           student: { select: { id: true, name: true, email: true } },
-          attachments: { select: { id: true, originalName: true, size: true, s3Url: true } },
+          attachments: { select: { id: true, originalName: true, size: true, s3Url: true, mimeType: true } },
           evaluations: {
-            where: session.user.role === "EVALUATOR" ? { evaluatorId: session.user.id } : session.user.role === "STUDENT" ? { status: "COMPLETED" } : undefined,
+            where: session.user.role === "STUDENT" ? studentPublishedEvaluations : !canManage ? { evaluatorId: session.user.id } : undefined,
             include: { evaluator: { select: { name: true } } },
           },
         },
@@ -33,18 +35,16 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
   });
   if (!task) notFound();
 
-  const evaluators = !["ADMIN", "TEACHER"].includes(session.user.role) ? [] : await db.user.findMany({
-    where: { role: { in: ["TEACHER", "EVALUATOR"] }, isActive: true },
-    select: { id: true, name: true, email: true },
-    orderBy: { name: "asc" },
-  });
+  const students = canManage ? await db.user.findMany({ where: { role: "STUDENT", classMemberships: { some: { classId: task.subject.classId } } }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }) : [];
 
   return (
     <TaskDetailClient
+      canManage={canManage}
       locale={locale}
       role={session.user.role}
       task={JSON.parse(JSON.stringify(task))}
-      evaluators={evaluators}
+      students={students}
+      userId={session.user.id}
     />
   );
 }

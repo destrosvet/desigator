@@ -1,3 +1,4 @@
+import { requireUnpublishedResults, PublishedResultsError } from "@/lib/result-publication";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
@@ -38,7 +39,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
   });
   if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
-  return NextResponse.json({ evaluation });
+  return NextResponse.json({ evaluation }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -74,6 +75,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const totalPoints = input.scores.reduce((sum, score) => sum + score.points, 0);
     if (totalPoints > evaluation.submission.task.maxPoints) return NextResponse.json({ error: "Součet bodů přesahuje maximum zadání." }, { status: 400 });
     const updated = await db.$transaction(async (tx) => {
+      await requireUnpublishedResults(tx, evaluation.submissionId);
       await tx.criterionScore.deleteMany({ where: { evaluationId: id } });
       if (input.scores.length) {
         await tx.criterionScore.createMany({
@@ -99,6 +101,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     return NextResponse.json({ evaluation: updated });
   } catch (error) {
+    if (error instanceof PublishedResultsError) return NextResponse.json({ error: error.message }, { status: 409 });
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }

@@ -1,3 +1,8 @@
+import { randomBytes } from "crypto";
+import { emailSchema, newPasswordSchema } from "@/lib/password-policy";
+import { readTableSort, sortTableRows } from "@/lib/table-sorting";
+import type { Prisma } from "@prisma/client";
+import { studentScope } from "@/lib/admin-records";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -18,7 +23,7 @@ export async function GET(req: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
 
-    const where: any = { role: "STUDENT" };
+    const where: any = { AND: [studentScope(session.user)] };
     if (classId) {
       where.classMemberships = { some: { classId } };
     }
@@ -30,6 +35,9 @@ export async function GET(req: Request) {
       ];
     }
 
+    const sorting = readTableSort(searchParams, ["name", "email", "externalId", "classes"]);
+    const computedSort = sorting?.key === "classes";
+    const orderBy: Prisma.UserOrderByWithRelationInput[] = [sorting && !computedSort ? { [sorting.key]: sorting.direction } : { createdAt: "desc" }, { id: "asc" }];
     const skip = (page - 1) * limit;
 
     const [students, total] = await Promise.all([
@@ -42,19 +50,21 @@ export async function GET(req: Request) {
           externalId: true,
           createdAt: true,
           classMemberships: {
+            where: session.user.role === "ADMIN" ? {} : { class: { organizationId: session.user.organizationId || "__no_organization__", ...(session.user.roles?.includes("SCHOOL_ADMIN") ? {} : { teacherId: session.user.id }) } },
             include: {
               class: { select: { name: true } },
             },
           },
         },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
+        orderBy,
+        skip: computedSort ? undefined : skip,
+        take: computedSort ? undefined : limit,
       }),
       db.user.count({ where }),
     ]);
 
-    return NextResponse.json({ students, total, page, limit });
+    const ordered = computedSort ? sortTableRows(students, sorting, (row) => row.classMemberships.map((item) => item.class.name).sort((a, b) => a.localeCompare(b, "cs")).join(", ")).slice(skip, skip + limit) : students;
+    return NextResponse.json({ students: ordered, total, page, limit });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch students" }, { status: 500 });
   }
@@ -67,35 +77,38 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
+    if (!session.user.organizationId) return NextResponse.json({ error: "Nejdříve zvolte svou školu." }, { status: 409 });
+    const body = z.record(z.string(), z.unknown()).parse(await req.json());
 
-    // Hromadné přidání – pole emailů
-    if (body.emails && Array.isArray(body.emails)) {
-      const results: Array<{ email: string; id: string; tempPassword: string }> = [];
-      for (const email of body.emails) {
-        const existing = await db.user.findUnique({ where: { email } });
-        if (!existing) {
-          const tempPassword = Math.random().toString(36).substring(2, 10);
-          const hashed = await bcrypt.hash(tempPassword, 12);
-          const user = await db.user.create({
-            data: {
-              email,
-              name: email.split("@")[0],
-              password: hashed,
-              role: "STUDENT",
-            },
+    // Validate the complete batch before hashing or writing any account.
+    if (Object.prototype.hasOwnProperty.call(body, "emails")) {
+      const { emails } = z.object({ emails: z.array(emailSchema).min(1).max(200) }).strict().parse(body);
+      if (new Set(emails).size !== emails.length) return NextResponse.json({ error: "Dávka obsahuje duplicitní e-mail." }, { status: 400 });
+      const existing = await db.user.findMany({ where: { OR: emails.map((email) => ({ email: { equals: email, mode: "insensitive" as const } })) }, select: { email: true } });
+      const occupied = new Set(existing.map((user) => user.email.toLowerCase()));
+      const accounts = await Promise.all(emails.filter((email) => !occupied.has(email)).map(async (email) => {
+        const tempPassword = randomBytes(18).toString("base64url");
+        return { email, tempPassword, password: await bcrypt.hash(tempPassword, 12) };
+      }));
+      const results = await db.$transaction(async (tx) => {
+        const created: Array<{ email: string; id: string; tempPassword: string }> = [];
+        for (const account of accounts) {
+          const user = await tx.user.create({
+            data: { email: account.email, name: account.email.split("@")[0], password: account.password, role: "STUDENT", roles: ["STUDENT"], organizationId: session.user.organizationId },
+            select: { id: true, email: true },
           });
-          results.push({ email, id: user.id, tempPassword });
+          created.push({ email: user.email, id: user.id, tempPassword: account.tempPassword });
         }
-      }
-      return NextResponse.json({ added: results.length, students: results }, { status: 201 });
+        return created;
+      });
+      return NextResponse.json({ added: results.length, skipped: emails.length - results.length, students: results }, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
 
     // Jednotlivé přidání
     const schema = z.object({
-      name: z.string().min(1),
-      email: z.string().email(),
-      password: z.string().min(6),
+      name: z.string().trim().min(1).max(200),
+      email: emailSchema,
+      password: newPasswordSchema,
     });
     const { name, email, password } = schema.parse(body);
 
@@ -106,7 +119,7 @@ export async function POST(req: Request) {
 
     const hashed = await bcrypt.hash(password, 12);
     const user = await db.user.create({
-      data: { name, email, password: hashed, role: "STUDENT" },
+      data: { name, email, password: hashed, role: "STUDENT", roles: ["STUDENT"], organizationId: session.user.organizationId },
       select: { id: true, name: true, email: true, role: true },
     });
 
@@ -115,6 +128,8 @@ export async function POST(req: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }
+    if (error instanceof SyntaxError) return NextResponse.json({ error: "Neplatný JSON." }, { status: 400 });
+    if ((error as { code?: string }).code === "P2002") return NextResponse.json({ error: "E-mail již existuje. Dávka nebyla uložena; načtěte stav a zkuste znovu." }, { status: 409 });
     return NextResponse.json({ error: "Failed to create student" }, { status: 500 });
   }
 }

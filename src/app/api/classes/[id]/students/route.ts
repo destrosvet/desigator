@@ -21,7 +21,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const { studentId } = schema.parse(await req.json());
-    const student = await db.user.findFirst({ where: { id: studentId, role: "STUDENT", isActive: true }, select: { id: true } });
+    const targetClass = await db.class.findUniqueOrThrow({ where: { id }, select: { organizationId: true } });
+    const student = await db.user.findFirst({ where: { id: studentId, organizationId: targetClass.organizationId, role: "STUDENT", isActive: true }, select: { id: true } });
     if (!student) return NextResponse.json({ error: "Student not found" }, { status: 404 });
     const membership = await db.classStudent.upsert({
       where: { classId_studentId: { classId: id, studentId } },

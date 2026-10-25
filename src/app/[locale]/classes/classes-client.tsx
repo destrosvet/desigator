@@ -91,9 +91,9 @@ export function ClassesClient({ classes, role, locale }: { classes: ClassItem[];
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {classes.map((item) => (
-            <Card key={item.id} className="cursor-pointer transition-shadow hover:shadow-md" onClick={() => router.push(`/${locale}/classes/${item.id}`)}>
-              <CardHeader><div className="flex items-start justify-between gap-2"><CardTitle>{item.name}</CardTitle><Badge variant="outline">{item.code}</Badge></div></CardHeader>
-              <CardContent className="space-y-3">
+            <Card key={item.id} className="min-w-0 cursor-pointer transition-shadow hover:shadow-md" onClick={() => router.push(`/${locale}/classes/${item.id}`)}>
+              <CardHeader className="min-w-0"><div className="flex min-w-0 flex-col items-start gap-2"><CardTitle className="max-w-full [overflow-wrap:anywhere]">{item.name}</CardTitle><Badge variant="outline" className="max-w-full whitespace-normal text-left [overflow-wrap:anywhere]">{item.code}</Badge></div></CardHeader>
+              <CardContent className="min-w-0 space-y-3 [overflow-wrap:anywhere]">
                 <p className="text-sm text-muted-foreground">{item.description || "Bez popisu"}</p>
                 <p className="text-sm">Učitel: {item.teacher.name}</p>
                 <div className="flex gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Users className="size-4" />{item._count.students}</span><span className="flex items-center gap-1"><BookOpen className="size-4" />{item._count.subjects}</span></div>

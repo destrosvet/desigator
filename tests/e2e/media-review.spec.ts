@@ -30,6 +30,8 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     const detailImage = await sharp(image).extract({ left: 300, top: 100, width: 600, height: 600 }).png().toBuffer();
     await login(student, "student1@desigator.cz", "student123");
     await student.goto(`/cs/tasks/${task.id}`);
+    await student.getByRole("button", { name: /Odevzdat práci|Otevřít moji práci/ }).click();
+    await student.getByLabel("Stav nové verze").selectOption("FINAL");
     await student.getByLabel("Text práce").fill("Geometrická kompozice a detail barevného řešení.");
     await student.getByLabel("Přílohy", { exact: true }).setInputFiles([{ name: "ilustrace.png", mimeType: "image/png", buffer: image }, { name: "detail.png", mimeType: "image/png", buffer: detailImage }]);
     await student.getByRole("button", { name: "Odevzdat", exact: true }).click();
@@ -48,7 +50,10 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     const storageBase = process.env.E2E_STORAGE_URL || "http://127.0.0.1:19000/desigator-audit";
     expect((await anonymous.request.get(`${storageBase}/submissions/${task.id}/${session.user.id}/${original.id}-ilustrace.png`)).status()).toBe(403);
 
-    const { users } = await (await teacher.request.get("/api/users?role=EVALUATOR")).json();
+    const available = await (await teacher.request.get("/api/users?role=EVALUATOR")).json();
+    const reviewerSession = await (await reviewer.request.get("/api/auth/session")).json();
+    const users = available.users.filter((user: { id: string }) => user.id === reviewerSession.user.id);
+    expect(users).toHaveLength(1);
     const assigned = await teacher.request.post("/api/evaluations", { data: { submissionId: submission.id, evaluatorId: users[0].id } });
     expect(assigned.status()).toBe(201);
     const { evaluation } = await assigned.json();
@@ -75,6 +80,25 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect.poll(() => mainImage.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1200);
     await reviewer.getByRole("button", { name: "Přiblížit obrázek", exact: true }).click();
     await expect(reviewer.getByLabel("Přiblížení", { exact: true })).toHaveText("125 %");
+    await reviewer.getByRole("button", { name: "Obnovit přiblížení", exact: true }).click();
+    const viewport = reviewer.getByTestId("work-preview");
+    const bounds = (await viewport.boundingBox())!;
+    const cursor = { x: bounds.x + bounds.width * 0.65, y: bounds.y + bounds.height * 0.55 };
+    const before = await mainImage.evaluate((node) => { const rect = node.getBoundingClientRect(); return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }; });
+    const point = { u: (cursor.x - before.left) / before.width, v: (cursor.y - before.top) / before.height };
+    const pageScroll = await reviewer.evaluate(() => window.scrollY);
+    await reviewer.mouse.move(cursor.x, cursor.y); await reviewer.mouse.wheel(0, -300);
+    await expect.poll(async () => Number((await reviewer.getByLabel("Přiblížení", { exact: true }).textContent())?.replace(/[^0-9]/g, ""))).toBeGreaterThan(100);
+    const anchored = await mainImage.evaluate((node, point) => { const rect = node.getBoundingClientRect(); return { x: rect.left + point.u * rect.width, y: rect.top + point.v * rect.height }; }, point);
+    expect(Math.abs(anchored.x - cursor.x)).toBeLessThan(2); expect(Math.abs(anchored.y - cursor.y)).toBeLessThan(2);
+    expect(await reviewer.evaluate(() => window.scrollY)).toBe(pageScroll);
+    const scrollBefore = await viewport.evaluate((node) => ({ x: node.scrollLeft, y: node.scrollTop }));
+    await reviewer.mouse.down({ button: "middle" }); await reviewer.mouse.move(cursor.x - 80, cursor.y - 60, { steps: 5 }); await reviewer.mouse.up({ button: "middle" });
+    const scrollAfter = await viewport.evaluate((node) => ({ x: node.scrollLeft, y: node.scrollTop }));
+    expect(scrollAfter.x - scrollBefore.x).toBeCloseTo(80, 0); expect(scrollAfter.y - scrollBefore.y).toBeCloseTo(60, 0);
+    await reviewer.getByRole("button", { name: "Obnovit přiblížení", exact: true }).click();
+    await expect(reviewer.getByLabel("Přiblížení", { exact: true })).toHaveText("100 %");
+    expect(await viewport.evaluate((node) => node.scrollLeft + node.scrollTop)).toBe(0);
     await reviewer.getByRole("button", { name: "Zobrazit detail.png", exact: true }).click();
     await expect.poll(() => reviewer.getByRole("img", { name: "detail.png", exact: true }).evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(600);
     await expect(reviewer.getByLabel("Přiblížení", { exact: true })).toHaveText("100 %");
@@ -95,7 +119,9 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await reviewer.getByLabel("Kompozice", { exact: true }).fill("55");
     await reviewer.getByRole("button", { name: "Dokončit hodnocení", exact: true }).click();
     await expect(reviewer.getByRole("status")).toContainText("Hodnocení bylo uloženo.");
-    const result = await (await student.request.get(`/api/evaluations/${evaluation.id}`)).json();
+    expect((await student.request.get(`/api/evaluations/${evaluation.id}`)).status()).toBe(404);
+    expect((await teacher.request.patch(`/api/submissions/${submission.id}/publication`, { data: { published: true } })).status()).toBe(409);
+    const result = await (await teacher.request.get(`/api/evaluations/${evaluation.id}`)).json();
     expect(result.evaluation.totalPoints).toBe(85);
     expect(result.evaluation.status).toBe("COMPLETED");
     const updatedTask = await (await teacher.request.get(`/api/tasks/${task.id}`)).json();

@@ -1,3 +1,4 @@
+import { visibleClassScope } from "@/lib/authorization";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -12,9 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const targetClass = await db.class.findFirst({
     where: {
       id,
-      ...(session.user.role === "ADMIN" ? {} : session.user.role === "TEACHER"
-        ? { teacherId: session.user.id }
-        : { students: { some: { studentId: session.user.id } } }),
+      ...visibleClassScope(session.user),
     },
     include: {
       teacher: { select: { id: true, name: true, email: true } },

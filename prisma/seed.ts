@@ -7,6 +7,7 @@ async function main() {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
     throw new Error("Demo seed is disabled in production. Use npm run db:admin to create an administrator.");
   }
+  await prisma.organization.upsert({ where: { id: "legacy" }, update: {}, create: { id: "legacy", name: "Původní organizace Desigator" } });
   const adminEmail = process.env.ADMIN_EMAIL || "admin@desigator.cz";
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -18,7 +19,7 @@ async function main() {
         name: "Administrátor",
         email: adminEmail,
         password: await bcrypt.hash(adminPassword, 12),
-        role: UserRole.ADMIN,
+        role: UserRole.ADMIN, roles: [UserRole.ADMIN],
       },
     });
     console.log(`✅ Admin vytvořen: ${adminEmail}`);
@@ -32,7 +33,7 @@ async function main() {
         name: "Pan Učitel",
         email: "teacher@desigator.cz",
         password: await bcrypt.hash("teacher123", 12),
-        role: UserRole.TEACHER,
+        role: UserRole.TEACHER, roles: [UserRole.TEACHER, UserRole.EVALUATOR], organizationId: "legacy",
       },
     });
     console.log(`✅ Učitel: teacher@desigator.cz / teacher123`);
@@ -46,7 +47,7 @@ async function main() {
         name: "Pan Hodnotitel",
         email: "evaluator@desigator.cz",
         password: await bcrypt.hash("evaluator123", 12),
-        role: UserRole.EVALUATOR,
+        role: UserRole.EVALUATOR, roles: [UserRole.EVALUATOR],
       },
     });
     console.log(`✅ Hodnotitel: evaluator@desigator.cz / evaluator123`);
@@ -68,7 +69,7 @@ async function main() {
           email: s.email,
           externalId: s.externalId,
           password: await bcrypt.hash("student123", 12),
-          role: UserRole.STUDENT,
+          role: UserRole.STUDENT, roles: [UserRole.STUDENT], organizationId: "legacy",
         },
       });
       console.log(`✅ Student: ${s.email} / externalId: ${s.externalId} / student123`);
