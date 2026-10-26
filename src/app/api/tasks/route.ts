@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     const where: any = { AND: [visibleTaskScope(session.user)] };
     if (status) where.status = status;
     const classId = searchParams.get("classId");
-    if (classId) where.subject = { ...(where.subject || {}), classId };
+    if (classId) where.subject = { ...(where.subject || {}), classes: { some: { classId } } };
     if (subjectName) {
       where.subject = { ...(where.subject || {}), name: subjectName };
     }
@@ -62,7 +62,7 @@ export async function GET(req: Request) {
         where,
         include: {
           creator: { select: { name: true } },
-          subject: { select: { name: true, class: { select: { name: true, organizationId: true, _count: { select: { students: true } } } } } },
+          subject: { select: { name: true, classes: { select: { classId: true, class: { select: { name: true, organizationId: true, students: { select: { studentId: true } } } } } } } },
           submissions: { where: session.user.role === "STUDENT" ? { studentId: session.user.id } : { OR: [{ task: managedTaskScope(session.user) }, { evaluations: { some: { evaluatorId: session.user.id } } }] }, select: { studentId: true }, distinct: ["studentId"] },
           _count: { select: { submissions: { where: session.user.role === "STUDENT" ? { studentId: session.user.id } : { OR: [{ task: managedTaskScope(session.user) }, { evaluations: { some: { evaluatorId: session.user.id } } }] } } } },
         },
@@ -73,7 +73,11 @@ export async function GET(req: Request) {
       db.task.count({ where }),
     ]);
 
-    const summaries = tasks.map(({ submissions, ...task }) => ({ ...task, submissionCount: submissions.length, studentCount: isAdmin(session.user) || (task.subject.class.organizationId === session.user.organizationId && (isSchoolAdmin(session.user) || task.creatorId === session.user.id)) ? task.subject.class._count.students : submissions.length }));
+    const summaries = tasks.map(({ submissions, ...task }) => {
+      const canSeeRoster = isAdmin(session.user) || (task.subject.classes[0]?.class.organizationId === session.user.organizationId && (isSchoolAdmin(session.user) || task.creatorId === session.user.id));
+      const studentCount = canSeeRoster ? new Set(task.subject.classes.flatMap((link) => link.class.students.map((member) => member.studentId))).size : submissions.length;
+      return { ...task, subject: { ...task.subject, class: { name: task.subject.classes.map((link) => link.class.name).join(", ") } }, submissionCount: submissions.length, studentCount };
+    });
     const ordered = computedSort ? sortTableRows(summaries, sorting, (row) => row.submissionCount).slice(skip, skip + limit) : summaries;
     return NextResponse.json({ tasks: ordered, total, page, limit });
   } catch (error) {

@@ -29,10 +29,10 @@ export async function GET(req: Request) {
   const taskId = new URL(req.url).searchParams.get("taskId");
   if (!taskId) return NextResponse.json({ error: "Vyberte zadání." }, { status: 400 });
   if (!(await canManageTask(session.user, taskId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const task = await db.task.findUnique({ where: { id: taskId }, select: { subject: { select: { year: true, name: true, class: { select: { name: true, students: { select: { student: { select: { id: true, name: true, externalId: true } } } } } } } } } });
+  const task = await db.task.findUnique({ where: { id: taskId }, select: { subject: { select: { year: true, name: true, classes: { select: { class: { select: { name: true, students: { select: { student: { select: { id: true, name: true, externalId: true } } } } } } } } } } } });
   if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
   const existing = await db.submission.findMany({ where: { taskId }, select: { studentId: true } });
-  return NextResponse.json({ subject: task.subject.name, year: task.subject.year, className: task.subject.class.name, students: task.subject.class.students.map(({ student }) => ({ ...student, hasSubmission: existing.some((work) => work.studentId === student.id) })) });
+  return NextResponse.json({ subject: task.subject.name, year: task.subject.year, className: task.subject.classes.map((link) => link.class.name).join(", "), students: [...new Map(task.subject.classes.flatMap((link) => link.class.students).map(({ student }) => [student.id, student])).values()].map((student) => ({ ...student, hasSubmission: existing.some((work) => work.studentId === student.id) })) });
 }
 
 export async function POST(req: Request) {
@@ -58,10 +58,10 @@ export async function POST(req: Request) {
     if (error) return NextResponse.json({ error }, { status: 400 });
   }
 
-    const task = await db.task.findUnique({ where: { id: taskId }, select: { subject: { select: { classId: true } } } });
+    const task = await db.task.findUnique({ where: { id: taskId }, select: { subject: { select: { classes: { select: { classId: true } } } } } });
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
-    const classStudents = await db.classStudent.findMany({ where: { classId: task.subject.classId }, select: { student: { select: { id: true, name: true, externalId: true } } } });
+    const classStudents = await db.classStudent.findMany({ where: { classId: { in: task.subject.classes.map((item) => item.classId) } }, select: { student: { select: { id: true, name: true, externalId: true } } } });
     const stage = z.enum(["WIP", "FINAL"]).safeParse(formData.get("stage") || "FINAL");
     const changeNote = z.string().max(2000).safeParse(formData.get("changeNote") || "");
     if (!stage.success || !changeNote.success) return NextResponse.json({ error: "Neplatný stav nebo popis verze." }, { status: 400 });

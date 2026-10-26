@@ -22,7 +22,7 @@ import { FilterConfig } from "@/components/data-filters";
 import { Plus, Copy, Loader2, ClipboardList } from "lucide-react";
 
 interface SubjectOption {
-  id: string; name: string; classId: string; year: number; class: { name: string };
+  id: string; name: string; year: number; classes: { classId: string; class: { name: string } }[];
 }
 
 interface Task {
@@ -143,7 +143,7 @@ export default function TasksPage() {
   const uniqueSubjectNames = [...new Set(subjects.map((s) => s.name))].sort();
 
   const filterConfig: FilterConfig[] = [
-    { key: "classId", label: "Třída", type: "select", options: [...new Map(subjects.map((subject) => [subject.classId, { value: subject.classId, label: subject.class.name }])).values()] },
+    { key: "classId", label: "Studijní skupina", type: "select", options: [...new Map(subjects.flatMap((subject) => subject.classes).map((link) => [link.classId, { value: link.classId, label: link.class.name }])).values()] },
     {
       key: "subjectName",
       label: "Předmět",
@@ -212,7 +212,7 @@ export default function TasksPage() {
                     setForm((current) => ({ ...current, title: template?.title || "", description: template?.description || "", instructions: template?.instructions || "", maxPoints: template?.maxPoints || 100 }));
                   }}><SelectTrigger id="task-template"><SelectValue placeholder="Bez šablony" /></SelectTrigger><SelectContent><SelectItem value="blank">Bez šablony</SelectItem>{templates.map((item) => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">Šablony spravujete v Nastavení → Moje šablony zadání.</p></div>
                   {templateCriteria.length > 0 && <p className="text-sm">Převzatá kritéria: {templateCriteria.map((item) => item.name + " (" + item.maxPoints + " b.)").join(", ")}. Před publikováním je můžete upravit.</p>}
-                  <div className="space-y-2"><Label htmlFor="task-subject">Předmět</Label><Select value={form.subjectId} onValueChange={(subjectId) => setForm({ ...form, subjectId })}><SelectTrigger id="task-subject"><SelectValue placeholder="Vyberte předmět" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name} · {subject.class.name} · {subject.year}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor="task-subject">Předmět</Label><Select value={form.subjectId} onValueChange={(subjectId) => setForm({ ...form, subjectId })}><SelectTrigger id="task-subject"><SelectValue placeholder="Vyberte předmět" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name} · {subject.classes.map((link) => link.class.name).join(", ")} · {subject.year}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label>Název</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Popis</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Instrukce</Label><Textarea value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></div>

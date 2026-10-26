@@ -9,6 +9,7 @@ import { z } from "zod";
 const classSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
+  academicYear: z.number().int().min(2000).max(2100).optional(),
   organizationId: z.string().min(1).optional(),
 });
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { name, description, organizationId: requestedOrganizationId } = classSchema.parse(body);
+    const { name, description, academicYear, organizationId: requestedOrganizationId } = classSchema.parse(body);
 
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
       data: {
         name,
         description,
+        academicYear,
         code,
         teacherId: session.user.id,
         organizationId,

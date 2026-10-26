@@ -18,7 +18,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ lo
     include: {
       teacher: { select: { name: true, email: true } },
       students: { include: { student: { select: { id: true, name: true, email: true, externalId: true } } }, orderBy: { joinedAt: "desc" } },
-      subjects: { select: { id: true, name: true, code: true, year: true, semester: true } },
+      subjectLinks: { select: { subject: { select: { id: true, name: true, code: true, year: true, semester: true } } } },
     },
   });
   if (!targetClass) notFound();
@@ -30,5 +30,5 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ lo
     take: 500,
   });
 
-  return <ClassDetailClient locale={locale} role={session.user.role} targetClass={JSON.parse(JSON.stringify(targetClass))} candidates={candidates} />;
+  return <ClassDetailClient locale={locale} role={session.user.role} targetClass={JSON.parse(JSON.stringify({ ...targetClass, subjects: targetClass.subjectLinks.map((link) => link.subject) }))} candidates={candidates} />;
 }

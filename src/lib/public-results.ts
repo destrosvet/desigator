@@ -7,10 +7,11 @@ export const publicImageTypes = ["image/jpeg","image/png","image/webp","image/gi
 export async function publicClasses() { return []; }
 export async function publicResults(shareToken: string, subjectId?: string) {
  if(!/^[a-f0-9]{64}$/.test(shareToken)) return null;
- const classroom=await db.class.findFirst({where:{resultsShare:{is:{token:shareToken}},isActive:true,publicResultsEnabled:true},select:{id:true,name:true,organizationId:true,organization:{select:{gradingScale:true}},subjects:{where:{isActive:true},select:{id:true,name:true,year:true},orderBy:[{year:"desc"},{name:"asc"}]}}});
+ const classroom=await db.class.findFirst({where:{resultsShare:{is:{token:shareToken}},isActive:true,publicResultsEnabled:true},select:{id:true,name:true,organizationId:true,organization:{select:{gradingScale:true}},subjectLinks:{where:{subject:{isActive:true}},select:{subject:{select:{id:true,name:true,year:true}}}}}});
  if(!classroom) return null;
  const classId=classroom.id;
- const subject=subjectId ? classroom.subjects.find(s=>s.id===subjectId) : classroom.subjects[0];
+ const subjects=classroom.subjectLinks.map(link=>link.subject).sort((a,b)=>b.year-a.year||a.name.localeCompare(b.name));
+ const subject=subjectId ? subjects.find(s=>s.id===subjectId) : subjects[0];
  if(subjectId && !subject) return null;
  const [members,tasks,adjustments]=await Promise.all([
  db.classStudent.findMany({where:{classId,student:{isActive:true,organizationId:classroom.organizationId,externalId:{not:null}}},select:{student:{select:{id:true,externalId:true}}}}),
@@ -25,5 +26,5 @@ export async function publicResults(shareToken: string, subjectId?: string) {
  const ownAdjustments=adjustments.filter(a=>a.studentId===student.id);const total=adjustedTotal(base,ownAdjustments);
  return {studentId:student.externalId!,cells:cells.map(({points,images,comments})=>({points,images,comments})),total,grade:finalGrade(total,maximum,gradingScale),provisional:cells.some(c=>c.points===null)};
  }).sort((a,b)=>a.studentId.localeCompare(b.studentId,undefined,{numeric:true}));
- return {id:classroom.id,name:classroom.name,subjects:classroom.subjects,subject:subject??null,tasks:tasks.map(({id,title,maxPoints})=>({id,title,maxPoints})),maximum,gradingScale,rows};
+ return {id:classroom.id,name:classroom.name,subjects,subject:subject??null,tasks:tasks.map(({id,title,maxPoints})=>({id,title,maxPoints})),maximum,gradingScale,rows};
 }

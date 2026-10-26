@@ -16,7 +16,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
   const task = await db.task.findUnique({
     where: { id },
     include: {
-      subject: { select: { classId: true, name: true, class: { select: { name: true } } } },
+      subject: { select: { name: true, class: { select: { name: true } }, classes: { select: { classId: true, class: { select: { name: true } } } } } },
       criteria: { orderBy: { order: "asc" } },
       submissions: {
         where: session.user.role === "STUDENT" ? { studentId: session.user.id }
@@ -35,14 +35,15 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
   });
   if (!task) notFound();
 
-  const students = canManage ? await db.user.findMany({ where: { role: "STUDENT", classMemberships: { some: { classId: task.subject.classId } } }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }) : [];
+  const classIds = task.subject.classes.map((item) => item.classId);
+  const students = canManage ? await db.user.findMany({ where: { role: "STUDENT", classMemberships: { some: { classId: { in: classIds } } } }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }) : [];
 
   return (
     <TaskDetailClient
       canManage={canManage}
       locale={locale}
       role={session.user.role}
-      task={JSON.parse(JSON.stringify(task))}
+      task={JSON.parse(JSON.stringify({ ...task, subject: { ...task.subject, class: { name: task.subject.classes.map((item) => item.class.name).join(", ") } } }))}
       students={students}
       userId={session.user.id}
     />

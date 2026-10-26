@@ -24,7 +24,7 @@ export async function GET(req:Request){
    options=await db.user.findMany({where:{organizationId,isActive:true,AND:[{OR:[{roles:{has:'TEACHER'}},{roles:{isEmpty:true},role:'TEACHER'}]},...tokens.map(t=>({name:contains(t)}))]},select:{id:true,name:true},take:21,orderBy:[{name:'asc'},{id:'asc'}]});
   }else{
    const matchTokens=tokens.map(t=>({OR:[{name:contains(t)},{code:contains(t)},...(/^\d{4}$/.test(t)?[{year:Number(t)}]:[])]}));
-   const currentWhere:Prisma.SubjectWhereInput={AND:[managedSubjectScope(user),...matchTokens,...(organizationId?[{class:{organizationId}}]:[]),...(year?[{year}]:[])]};
+   const currentWhere:Prisma.SubjectWhereInput={AND:[managedSubjectScope(user),...matchTokens,...(organizationId?[{classes:{some:{class:{organizationId}}}}]:[]),...(year?[{year}]:[])]};
    const historicalWhere:Prisma.HistoricalCourseWhereInput={AND:[historicalCourseScope(user),...matchTokens,...(organizationId?[{import:{organizationId}}]:[]),...(year?[{year}]:[])]};
    const [current,historical]=await Promise.all([source==='historical'?[]:db.subject.findMany({where:currentWhere,select:{id:true,name:true,code:true,year:true},orderBy:[{name:'asc'},{id:'asc'}],take:21}),source==='current'?[]:db.historicalCourse.findMany({where:historicalWhere,select:{id:true,name:true,code:true,year:true},orderBy:[{name:'asc'},{id:'asc'}],take:21})]);
    options=[...current.map(s=>({id:'current:'+s.id,name:(s.code?s.code+' · ':'')+s.name+' · '+s.year})),...historical.map(s=>({id:'historical:'+s.id,name:(s.code?s.code+' · ':'')+s.name+' · '+(s.year??'rok neuveden')+' (archiv)'}))].sort((a,b)=>a.name.localeCompare(b.name,'cs')||a.id.localeCompare(b.id));

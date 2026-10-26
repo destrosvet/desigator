@@ -14,7 +14,7 @@ export async function getStatistics(user: AuthUser, query: z.infer<typeof statis
  const organizationScope = isAdmin(user)?{}:{id:schoolId(user)};
  const [organizations,subjects,courses] = await Promise.all([
   db.organization.findMany({where:organizationScope,select:{id:true,name:true},orderBy:{name:'asc'}}),
-  db.subject.findMany({where:{AND:[managedSubjectScope(user),...(query.organizationId?[{class:{organizationId:query.organizationId}}]:[])]},select:{id:true,name:true,code:true,year:true,teacherId:true,class:{select:{organizationId:true,organization:{select:{name:true}}}}},orderBy:[{year:'desc'},{name:'asc'}]}),
+  db.subject.findMany({where:{AND:[managedSubjectScope(user),...(query.organizationId?[{classes:{some:{class:{organizationId:query.organizationId}}}}]:[])]},select:{id:true,name:true,code:true,year:true,teacherId:true,class:{select:{organizationId:true,organization:{select:{name:true}}}}},orderBy:[{year:'desc'},{name:'asc'}]}),
   db.historicalCourse.findMany({where:{AND:[historicalCourseScope(user),...(query.organizationId?[{import:{organizationId:query.organizationId}}]:[])]},select:{id:true,name:true,code:true,year:true,teacherId:true,teacher:{select:{name:true}},import:{select:{organizationId:true,organization:{select:{name:true}}}}},orderBy:[{year:'desc'},{name:'asc'}]})
  ]);
  const selectedOrganizationIds=organizations.filter(o=>!query.organizationId||o.id===query.organizationId).map(o=>o.id);

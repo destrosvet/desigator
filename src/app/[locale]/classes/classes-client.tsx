@@ -18,6 +18,7 @@ type ClassItem = {
   name: string;
   code: string;
   description: string | null;
+  academicYear: number | null;
   teacher: { name: string };
   _count: { students: number; subjects: number };
 };
@@ -28,6 +29,8 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const today = new Date();
+  const [academicYear, setAcademicYear] = useState(today.getMonth() >= 7 ? today.getFullYear() : today.getFullYear() - 1);
   const [organizationId, setOrganizationId] = useState(defaultOrganizationId);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +42,7 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
     const response = await fetch("/api/classes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description, ...(role === "ADMIN" ? { organizationId } : {}) }),
+      body: JSON.stringify({ name, description, academicYear, ...(role === "ADMIN" ? { organizationId } : {}) }),
     });
     const result = await response.json();
     setBusy(false);
@@ -82,6 +85,7 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
 
                   {role === "ADMIN" ? <div className="space-y-2"><Label htmlFor="class-organization">Škola</Label><Select value={organizationId} onValueChange={setOrganizationId}><SelectTrigger id="class-organization"><SelectValue placeholder="Vyberte školu" /></SelectTrigger><SelectContent>{organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select>{!organizations.length ? <p className="text-sm text-muted-foreground">Nejdříve založte školu v Nastavení → Organizace.</p> : null}</div> : null}
                   <div className="space-y-2"><Label htmlFor="class-description">Popis</Label><Textarea id="class-description" value={description} onChange={(event) => setDescription(event.target.value)} /></div>
+                  <div className="space-y-2"><Label htmlFor="class-year">Začátek akademického roku</Label><Input id="class-year" type="number" min={2000} max={2100} value={academicYear} onChange={(event) => setAcademicYear(Number(event.target.value))} /><p className="text-xs text-muted-foreground">Zobrazeno jako {academicYear}/{String(academicYear + 1).slice(-2)}</p></div>
                   <Button onClick={createClass} disabled={busy || !name.trim() || (role === "ADMIN" && !organizationId)}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Vytvořit</Button>
                 </div>
               ) : (
@@ -100,7 +104,7 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
             <Card key={item.id} className="min-w-0 cursor-pointer transition-shadow hover:shadow-md" onClick={() => router.push(`/${locale}/classes/${item.id}`)}>
               <CardHeader className="min-w-0"><div className="flex min-w-0 flex-col items-start gap-2"><CardTitle className="max-w-full [overflow-wrap:anywhere]">{item.name}</CardTitle><Badge variant="outline" className="max-w-full whitespace-normal text-left [overflow-wrap:anywhere]">{item.code}</Badge></div></CardHeader>
               <CardContent className="min-w-0 space-y-3 [overflow-wrap:anywhere]">
-                <p className="text-sm text-muted-foreground">{item.description || "Bez popisu"}</p>
+                <p className="text-sm text-muted-foreground">{item.description || "Bez popisu"}</p>{item.academicYear ? <p className="text-sm text-muted-foreground">Akademický rok {item.academicYear}/{String(item.academicYear + 1).slice(-2)}</p> : null}
                 <p className="text-sm">Učitel: {item.teacher.name}</p>
                 <div className="flex gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Users className="size-4" />{item._count.students}</span><span className="flex items-center gap-1"><BookOpen className="size-4" />{item._count.subjects}</span></div>
               </CardContent>

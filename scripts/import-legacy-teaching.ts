@@ -25,6 +25,7 @@ async function main(){
    const classId=archive.id+'-class-'+c.key,subjectId=archive.id+'-subject-'+c.key;
    await tx.class.upsert({where:{id:classId},update:{},create:{id:classId,organizationId,teacherId:teacher.id,name:'Archiv: '+c.code+' '+(c.year||'rok neznámý'),code:classId,description:'Historická skupina z původního systému.',isActive:false}});
    await tx.subject.upsert({where:{id:subjectId},update:{},create:{id:subjectId,classId,teacherId:teacher.id,code:c.code,name:c.name,year:c.year,semester:c.semester,description:'Importovaný historický předmět. '+(!c.year?'Rok není ve zdroji znám; hodnota 0 znamená neznámý rok.':''),isActive:false}});
+   await tx.subjectClass.upsert({where:{subjectId_classId:{subjectId,classId}},update:{},create:{subjectId,classId}});
   }
   const courseKeys=new Map(courses.map(c=>[c.id,String(c.legacyId)]));
   for(const t of tasks){

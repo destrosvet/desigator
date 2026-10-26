@@ -25,6 +25,8 @@ interface Task {
   createdAt: string;
 }
 
+interface ClassOption { id: string; name: string }
+
 interface SubjectDetail {
   id: string;
   code: string;
@@ -32,7 +34,7 @@ interface SubjectDetail {
   description: string | null;
   semester: string;
   year: number;
-  class: { name: string };
+  classes: { classId: string; class: { id: string; name: string } }[];
   teacher: { name: string };
   tasks: Task[];
 }
@@ -51,6 +53,7 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
   const [taskPage, setTaskPage] = useState(1);
   const [taskLimit, setTaskLimit] = useState(20);
   const [subject, setSubject] = useState<SubjectDetail | null>(null);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -69,6 +72,12 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
   };
 
   useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/classes?limit=999", { signal: controller.signal }).then((response) => response.json()).then((data) => setClasses(data.classes || [])).catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     params.then(async (p) => {
       if (cancelled) return;
@@ -85,7 +94,7 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
       const res = await fetch(`/api/subjects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subject),
+        body: JSON.stringify({ ...subject, classIds: subject.classes.map((item) => item.classId) }),
       });
       if (res.ok) {
         fetchSubject(id);
@@ -194,10 +203,12 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
                 <Label>Rok</Label>
                 <Input type="number" value={subject.year} onChange={(e) => setSubject({ ...subject, year: parseInt(e.target.value) || 2025 })} disabled={!canEdit} />
               </div>
-              <div className="space-y-2">
-                <Label>Třída</Label>
-                <Input value={subject.class?.name} disabled />
-              </div>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Studijní skupiny</legend>
+                <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+                  {classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!canEdit} checked={subject.classes.some((link) => link.classId === item.id)} onChange={(event) => setSubject({ ...subject, classes: event.target.checked ? [...subject.classes, { classId: item.id, class: item }] : subject.classes.filter((link) => link.classId !== item.id) })} />{item.name}</label>)}
+                </div>
+              </fieldset>
             </div>
           </CardContent>
         </Card>

@@ -6,15 +6,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { canManageClass } from "@/lib/authorization";
+import { managedClassScope } from "@/lib/authorization";
 
 const subjectSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   semester: z.enum(["FULL_YEAR", "SUMMER", "WINTER"]).default("FULL_YEAR"),
   year: z.number().min(2000).max(2100).default(new Date().getFullYear()),
-  classId: z.string().min(1),
-});
+  classIds: z.array(z.string().min(1)).min(1).optional(),
+  classId: z.string().min(1).optional(),
+}).refine((value) => value.classIds?.length || value.classId, { message: "Vyberte alespoň jednu studijní skupinu." });
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
     const order = sorting?.direction ?? "desc";
 
     const where: any = { AND: [visibleSubjectScope(session.user)] };
-    if (classId) where.classId = classId;
+    if (classId) where.classes = { some: { classId } };
     if (year) where.year = parseInt(year);
     if (semester) where.semester = semester;
     if (search) {
@@ -53,7 +54,7 @@ export async function GET(req: Request) {
       db.subject.findMany({
         where,
         include: {
-          class: { select: { name: true } },
+          classes: { select: { classId: true, class: { select: { name: true } } }, orderBy: { class: { name: "asc" } } },
           teacher: { select: { name: true } },
           _count: { select: { tasks: { where: visibleTaskScope(session.user) } } },
         },
@@ -78,11 +79,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { name, description, semester, year, classId } = subjectSchema.parse(body);
-
-    if (!(await canManageClass(session.user, classId))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { name, description, semester, year, classIds: requestedClassIds, classId: legacyClassId } = subjectSchema.parse(body);
+    const classIds = [...new Set(requestedClassIds?.length ? requestedClassIds : [legacyClassId!])];
+    const classes = await db.class.findMany({ where: { id: { in: classIds }, ...managedClassScope(session.user) }, select: { id: true, organizationId: true } });
+    if (classes.length !== classIds.length) return NextResponse.json({ error: "Některá vybraná skupina neexistuje nebo k ní nemáte přístup." }, { status: 403 });
+    if (new Set(classes.map((item) => item.organizationId)).size !== 1) return NextResponse.json({ error: "Všechny skupiny předmětu musí patřit do stejné školy." }, { status: 400 });
 
     const subject = await db.subject.create({
       data: {
@@ -90,15 +91,15 @@ export async function POST(req: Request) {
         description,
         semester,
         year,
-        classId,
+        classId: classIds[0],
+        classes: { create: classIds.map((classId) => ({ classId })) },
         teacherId: session.user.id,
       },
       include: {
-        class: { select: { name: true } },
+        classes: { select: { classId: true, class: { select: { name: true } } }, orderBy: { class: { name: "asc" } } },
         teacher: { select: { name: true } },
       },
     });
-
     return NextResponse.json({ subject }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -119,6 +119,7 @@ async function main() {
       });
       console.log(`✅ Předmět: ${subject.name} (${subj.semester}, ${subj.year})`);
     }
+    await prisma.subjectClass.upsert({ where: { subjectId_classId: { subjectId: subject.id, classId: cls!.id } }, update: {}, create: { subjectId: subject.id, classId: cls!.id } });
     subjects.push(subject);
   }
 

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     where: {
       id: taskId,
       status: "PUBLISHED",
-      subject: { class: { organizationId: session.user.organizationId || "__no_organization__", students: { some: { studentId: session.user.id } } } },
+      subject: { classes: { some: { class: { organizationId: session.user.organizationId || "__no_organization__", students: { some: { studentId: session.user.id } } } } } },
     },
     select: { id: true, deadline: true },
   });

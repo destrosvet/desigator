@@ -21,7 +21,7 @@ export default async function EvaluationsPage({ params, searchParams }: {
   const scope = evaluationScope(session.user);
   const tasks = await db.task.findMany({
     where: { submissions: { some: { evaluations: { some: scope } } } },
-    select: { id: true, title: true, subject: { select: { id: true, name: true, year: true, class: { select: { name: true } } } }, submissions: { where: { evaluations: { some: scope } }, select: { evaluations: { where: scope, select: { status: true } } } } },
+    select: { id: true, title: true, subject: { select: { id: true, name: true, year: true, classes: { select: { class: { select: { name: true } } } } } }, submissions: { where: { evaluations: { some: scope } }, select: { evaluations: { where: scope, select: { status: true } } } } },
     orderBy: { title: "asc" },
   });
   const summaries = tasks.map((task) => {
@@ -40,7 +40,7 @@ export default async function EvaluationsPage({ params, searchParams }: {
   const subjects = [...new Map(summaries.map((task) => [task.subject.id, task.subject])).values()].sort((a, b) => a.name.localeCompare(b.name, "cs"));
   const cards = subject ? summaries.filter((task) => task.subject.id === subject.id).map((task) => ({ id: task.id, title: task.title, detail: "Studentské práce v úkolu", total: task.total, completed: task.completed, href: `/evaluations?taskId=${task.id}` })) : subjects.map((item) => {
     const assignments = summaries.filter((task) => task.subject.id === item.id);
-    return { id: item.id, title: item.name, detail: `${item.class.name} · ${item.year} · ${assignments.length} úkolů`, total: assignments.reduce((sum, task) => sum + task.total, 0), completed: assignments.reduce((sum, task) => sum + task.completed, 0), href: `/evaluations?subjectId=${item.id}` };
+    return { id: item.id, title: item.name, detail: `${item.classes.map((link) => link.class.name).join(", ")} · ${item.year} · ${assignments.length} úkolů`, total: assignments.reduce((sum, task) => sum + task.total, 0), completed: assignments.reduce((sum, task) => sum + task.completed, 0), href: `/evaluations?subjectId=${item.id}` };
   });
   return <AppShell>{breadcrumbs}<div className="space-y-6"><header><h1 className="text-2xl font-bold">{subject ? subject.name : "Předměty k hodnocení"}</h1><p className="mt-2 text-sm text-muted-foreground">{subject ? "Vyberte úkol. Otevře se přehled všech přiřazených studentských prací." : "Vyberte předmět a potom úkol, který chcete hodnotit."}</p></header><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{cards.map((card) => <Link key={card.id} href={card.href} className="space-y-4 rounded-xl border bg-card p-5 transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-primary"><div><h2 className="font-semibold">{card.title}</h2><p className="mt-1 text-sm text-muted-foreground">{card.detail}</p></div><div><div className="mb-2 flex justify-between text-xs"><span>{card.completed} / {card.total} hodnocení dokončeno</span><span>{card.total - card.completed} zbývá</span></div><div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${card.total ? card.completed / card.total * 100 : 0}%` }} /></div></div></Link>)}</div>{!cards.length ? <p className="rounded-xl border border-dashed p-8 text-muted-foreground">Zatím nemáte přiřazené žádné práce k hodnocení.</p> : null}</div></AppShell>;
 }

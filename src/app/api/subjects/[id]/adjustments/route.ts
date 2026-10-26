@@ -6,8 +6,8 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
  if(!parsed.success)return reply({error:"invalidInput"},400);const input=parsed.data,amountCents=parseAdjustmentCents(input.points);if(amountCents===null)return reply({error:"invalidPoints"},400);
  const result=await db.$transaction(async tx=>{
  await tx.$queryRaw`SELECT id FROM subjects WHERE id = ${id} FOR UPDATE`;
- const subject=await tx.subject.findFirst({where:{id,isActive:true,class:{isActive:true}},select:{classId:true,class:{select:{organizationId:true}}}});if(!subject)return {error:"notFound"};
- const member=await tx.classStudent.findFirst({where:{classId:subject.classId,studentId:input.studentId,student:{isActive:true,organizationId:subject.class.organizationId}},select:{id:true}});if(!member)return {error:"notMember"};
+ const subject=await tx.subject.findFirst({where:{id,isActive:true,classes:{some:{class:{isActive:true}}}},select:{classes:{select:{classId:true,class:{select:{organizationId:true}}}}}});if(!subject)return {error:"notFound"};
+ const member=await tx.classStudent.findFirst({where:{classId:{in:subject.classes.map(link=>link.classId)},studentId:input.studentId,student:{isActive:true,organizationId:subject.classes[0].class.organizationId}},select:{id:true}});if(!member)return {error:"notMember"};
  const previous=await tx.pointAdjustment.findUnique({where:{requestId:input.requestId}});if(previous)return previous.subjectId===id&&previous.studentId===input.studentId&&previous.amountCents===amountCents&&previous.reason===input.reason&&previous.visibleToStudent===input.visibleToStudent?{id:previous.id}:{error:"conflict"};
  const created=await tx.pointAdjustment.create({data:{subjectId:id,studentId:input.studentId,amountCents,reason:input.reason,visibleToStudent:input.visibleToStudent,authorId:session.user.id,requestId:input.requestId}});return {id:created.id};
  });return reply(result,"error" in result?409:201);

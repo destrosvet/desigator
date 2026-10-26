@@ -32,7 +32,7 @@ interface Subject {
   description: string | null;
   semester: string;
   year: number;
-  class: { name: string };
+  classes: { classId: string; class: { name: string } }[];
   teacher: { name: string };
   _count: { tasks: number };
 }
@@ -65,7 +65,7 @@ export default function SubjectsPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classId: "" });
+  const [form, setForm] = useState({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classIds: [] as string[] });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -119,8 +119,8 @@ export default function SubjectsPage() {
 
   const handleCreate = async () => {
     setCreateError("");
-    if (!form.classId) {
-      setCreateError("Vyberte třídu, do které předmět patří.");
+    if (!form.classIds.length) {
+      setCreateError("Vyberte alespoň jednu studijní skupinu.");
       return;
     }
     setCreating(true);
@@ -134,7 +134,7 @@ export default function SubjectsPage() {
         throw new Error(res.status === 403 ? "Vybraná třída už neexistuje nebo k ní nemáte přístup." : "Předmět se nepodařilo vytvořit.");
       }
       setDialogOpen(false);
-      setForm({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classId: "" });
+      setForm({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classIds: [] as string[] });
       void fetchSubjects();
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Předmět se nepodařilo vytvořit.");
@@ -173,7 +173,7 @@ export default function SubjectsPage() {
   const columns = [
     { key: "code", label: "Kód" },
     { key: "name", label: "Název", render: (s: Subject) => <span className="font-medium">{s.name}</span> },
-    { key: "class", label: "Třída", render: (s: Subject) => s.class?.name },
+    { key: "class", label: "Studijní skupiny", render: (s: Subject) => s.classes.map((item) => item.class.name).join(", ") },
     { key: "semester", label: "Semestr", render: (s: Subject) => (
       <Badge variant="secondary" className={semesterColors[s.semester] || ""}>{semesterLabels[s.semester] || s.semester}</Badge>
     )},
@@ -215,15 +215,13 @@ export default function SubjectsPage() {
                 <div className="space-y-4">
                   <div className="space-y-2"><Label>Název</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Popis</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subject-class">Třída</Label>
-                    <Select value={form.classId} onValueChange={(classId) => { setForm({ ...form, classId }); setCreateError(""); }} disabled={!classes.length}>
-                      <SelectTrigger id="subject-class"><SelectValue placeholder="Vyberte třídu" /></SelectTrigger>
-                      <SelectContent>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                    {!classes.length && <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Nejdřív je potřeba založit třídu. <button type="button" className="font-medium text-primary underline" onClick={() => router.push(`/${locale}/classes`)}>Přejít ke třídám</button></div>}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium">Studijní skupiny</legend>
+                    <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-3">
+                      {classes.map((item) => <label key={item.id} className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={form.classIds.includes(item.id)} onChange={(event) => { setForm((current) => ({ ...current, classIds: event.target.checked ? [...current.classIds, item.id] : current.classIds.filter((id) => id !== item.id) })); setCreateError(""); }} />{item.name}</label>)}
+                    </div>
+                    {!classes.length ? <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Nejdřív je potřeba založit studijní skupinu. <button type="button" className="font-medium text-primary underline" onClick={() => router.push(`/${locale}/classes`)}>Přejít ke skupinám</button></div> : <p className="text-xs text-muted-foreground">Vyberte všechny skupiny, které mají předmět společně.</p>}
+                  </fieldset>                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Semestr</Label>
                       <Select value={form.semester} onValueChange={(v) => setForm({ ...form, semester: v })}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
@@ -237,7 +235,7 @@ export default function SubjectsPage() {
                     <div className="space-y-2"><Label>Rok</Label><Input type="number" value={form.year} onChange={(e) => setForm({ ...form, year: parseInt(e.target.value) || 2025 })} /></div>
                   </div>
                   {createError && <p role="alert" className="text-sm text-destructive">{createError}</p>}
-                  <Button onClick={handleCreate} disabled={creating || !form.name.trim() || !form.classId} className="w-full">
+                  <Button onClick={handleCreate} disabled={creating || !form.name.trim() || !form.classIds.length} className="w-full">
                     {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{t("create")}
                   </Button>
                 </div>

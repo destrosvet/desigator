@@ -154,6 +154,7 @@ model Class {
   id          String   @id @default(cuid())
   name        String
   description String?
+  academicYear Int?
   code        String   @unique // unikátní kód pro připojení
   teacherId   String
   teacher     User     @relation("ClassTeacher", fields: [teacherId], references: [id])
@@ -166,6 +167,7 @@ model Class {
 
   // Předměty v rámci třídy
   subjects Subject[]
+  subjectLinks SubjectClass[]
 
   @@index([organizationId])
   @@index([code])
@@ -201,6 +203,7 @@ model Subject {
   year        Int          // např. 2025
   classId     String
   class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classes     SubjectClass[]
   teacherId   String       // učitel předmětu
   teacher     User         @relation("SubjectCreator", fields: [teacherId], references: [id])
   isActive    Boolean      @default(true)
@@ -221,6 +224,17 @@ model Subject {
 // TASKY / ZADÁNÍ
 // ============================================
 
+model SubjectClass {
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classId String
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([subjectId, classId])
+  @@index([classId])
+  @@map("subject_classes")
+}
 model Task {
   id          String     @id @default(cuid())
   legacyId    Int?       // staré MySQL task_id pro migraci

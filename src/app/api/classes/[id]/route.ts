@@ -18,11 +18,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: {
       teacher: { select: { id: true, name: true, email: true } },
       students: { include: { student: { select: { id: true, name: true, email: true, externalId: true } } }, orderBy: { joinedAt: "desc" } },
-      subjects: { select: { id: true, name: true, code: true, year: true, semester: true } },
+      subjectLinks: { select: { subject: { select: { id: true, name: true, code: true, year: true, semester: true } } } },
     },
   });
   if (!targetClass) return NextResponse.json({ error: "Class not found" }, { status: 404 });
-  return NextResponse.json({ class: targetClass });
+  return NextResponse.json({ class: { ...targetClass, subjects: targetClass.subjectLinks.map((link) => link.subject) } });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

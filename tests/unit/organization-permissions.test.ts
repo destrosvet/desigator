@@ -11,7 +11,7 @@ describe("school permissions", () => {
     expect(isSchoolAdmin(combined)).toBe(true); expect(isAdmin(combined)).toBe(false);
     expect(hasRole(combined, "EVALUATOR")).toBe(true);
     expect(managedClassScope(combined)).toEqual({ organizationId: "school-a" });
-    expect(managedTaskScope(combined)).toEqual({ subject: { class: { organizationId: "school-a" } } });
+    expect(managedTaskScope(combined)).toEqual({ subject: { classes: { some: { class: { organizationId: "school-a" } } } } });
   });
   it("does not treat a pure platform administrator as a school member", () => {
     const admin = { id: "platform", role: "ADMIN", roles: ["ADMIN"], organizationId: "legacy" };
@@ -27,7 +27,7 @@ describe("school permissions", () => {
     expect(managedClassScope(admin)).toEqual({});
   });
   it("keeps a teacher's ownership restriction inside the home school", () => {
-    expect(managedTaskScope({ ...combined, roles: ["TEACHER", "EVALUATOR"] })).toEqual({ creatorId: "teacher", subject: { class: { organizationId: "school-a" } } });
+    expect(managedTaskScope({ ...combined, roles: ["TEACHER", "EVALUATOR"] })).toEqual({ creatorId: "teacher", subject: { classes: { some: { class: { organizationId: "school-a" } } } } });
   });
   it("fails closed for an account without a school", () => {
     expect(managedClassScope({ id: "teacher", role: "TEACHER" })).toMatchObject({ organizationId: "__no_organization__" });
