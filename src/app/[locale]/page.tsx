@@ -123,12 +123,12 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
         </Link>
       </nav>
 
-      <section className="relative mx-auto grid max-w-[1440px] items-center gap-14 px-5 pb-24 pt-14 sm:px-8 sm:pt-20 lg:grid-cols-[.86fr_1.14fr] lg:px-12 lg:pb-32 lg:pt-24">
-        <div className="relative z-10 max-w-2xl">
+      <section className="landing-hero relative mx-auto grid max-w-[1440px] items-center gap-12 px-5 pb-24 pt-14 sm:px-8 sm:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:px-12 lg:pb-32 lg:pt-24">
+        <div className="relative z-10 min-w-0 max-w-2xl">
           <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#b94411]/20 bg-[#b94411]/7 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#97360d] dark:border-[#ffad70]/25 dark:bg-[#ffad70]/10 dark:text-[#ffbd8b]">
             <span className="size-1.5 rounded-full bg-[#b94411] dark:bg-[#ffad70]" />{t.eyebrow}
           </div>
-          <h1 className="text-balance text-[clamp(3.4rem,7vw,7.4rem)] font-semibold leading-[.88] tracking-[-.065em]">
+          <h1 className="landing-title text-balance text-[clamp(3rem,5.1vw,5.5rem)] font-semibold leading-[.98] tracking-[-.065em]">
             {t.titleA}<br/><span className="landing-accent italic">{t.titleB}</span>
           </h1>
           <p className="mt-8 max-w-xl text-lg leading-8 text-black/62 dark:text-white/62 sm:text-xl">{t.intro}</p>
