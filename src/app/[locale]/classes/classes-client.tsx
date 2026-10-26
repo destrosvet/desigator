@@ -35,6 +35,7 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
   const canCreate = role === "ADMIN" || role === "TEACHER";
 
   async function createClass() {
@@ -46,10 +47,11 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
     });
     const result = await response.json();
     setBusy(false);
-    setMessage(response.ok ? "Třída byla vytvořena." : result.error || "Vytvoření selhalo.");
+    setMessage(response.ok ? "" : result.error || "Vytvoření selhalo.");
     if (response.ok) {
       setName("");
       setDescription("");
+      setDialogOpen(false);
       router.refresh();
     }
   }
@@ -63,9 +65,10 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
     });
     const result = await response.json();
     setBusy(false);
-    setMessage(response.ok ? `Připojeno ke třídě ${result.class.name}.` : result.error || "Připojení selhalo.");
+    setMessage(response.ok ? "" : result.error || "Připojení selhalo.");
     if (response.ok) {
       setCode("");
+      setDialogOpen(false);
       router.refresh();
     }
   }
@@ -75,7 +78,7 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h1 className="text-3xl font-bold">Třídy</h1><p className="text-muted-foreground">Správa tříd a členství</p></div>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setMessage(""); }}>
             <DialogTrigger asChild><Button><Plus className="mr-2 size-4" />{canCreate ? "Nová třída" : "Připojit se"}</Button></DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>{canCreate ? "Vytvořit třídu" : "Připojit se ke třídě"}</DialogTitle></DialogHeader>
