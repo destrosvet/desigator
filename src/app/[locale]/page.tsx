@@ -3,16 +3,12 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import {
   ArrowRight,
-  Box,
   Check,
-  FileText,
   Github,
-  Image as ImageIcon,
   Layers3,
   MessageSquareText,
   ShieldCheck,
   Sparkles,
-  UploadCloud,
 } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 
@@ -21,8 +17,7 @@ type LandingCopy = {
   metaTitle: string; metaDescription: string; nav: [string, string][];
   login: string; app: string; eyebrow: string; titleA: string; titleB: string; intro: string;
   primary: string; signedPrimary: string; secondary: string; trust: string[];
-  mockCourse: string; mockTask: string; mockStudent: string; mockVersion: string; mockScore: string;
-  mockReview: string; mockCriterion: string; mockNote: string;
+  mockNote: string;
   flowEyebrow: string; flowTitle: string; flowIntro: string;
   features: { title: string; text: string; icon: FeatureIcon }[];
   steps: [string, string, string][];
@@ -48,14 +43,7 @@ const copy: Record<"cs" | "en", LandingCopy> = {
     signedPrimary: "Pokračovat do aplikace",
     secondary: "Prohlédnout možnosti",
     trust: ["Vlastní data", "Privátní úložiště", "Bez vendor lock-inu"],
-    mockCourse: "Vizuální identita",
-    mockTask: "Systém značky",
-    mockStudent: "Klára Novotná",
-    mockVersion: "Finální verze · před 12 min",
-    mockScore: "84 / 100",
-    mockReview: "Hodnocení práce",
-    mockCriterion: "Koncepce a konzistence",
-    mockNote: "Silný systém, který drží napříč formáty. Zpřesněte ještě práci s kontrastem.",
+    mockNote: "Není úplně jasné, jestli se směje.",
     flowEyebrow: "Jeden souvislý proces",
     flowTitle: "Od prvního briefu až po reflexi výsledků.",
     flowIntro: "Méně přepínání mezi disky, tabulkami a e-maily. Více času na práci, která studenty skutečně posouvá.",
@@ -90,7 +78,7 @@ const copy: Record<"cs" | "en", LandingCopy> = {
     intro: "Desigator brings briefs, submissions, visual previews, and fair assessment into one calm workspace.",
     primary: "Continue to sign in", signedPrimary: "Continue to workspace", secondary: "Explore the product",
     trust: ["Own your data", "Private storage", "No vendor lock-in"],
-    mockCourse: "Visual identity", mockTask: "Brand system", mockStudent: "Clara Novak", mockVersion: "Final version · 12 min ago", mockScore: "84 / 100", mockReview: "Project review", mockCriterion: "Concept and consistency", mockNote: "A strong system that holds together across formats. Refine the use of contrast next.",
+    mockNote: "It is not entirely clear whether she is smiling.",
     flowEyebrow: "One connected workflow", flowTitle: "From the first brief to meaningful reflection.", flowIntro: "Less switching between drives, spreadsheets, and email. More time for the work that helps students grow.",
     features: [
       { title: "Work in context", text: "Review images, PDFs, video, and 3D models right beside criteria and feedback.", icon: "layers" },
@@ -159,35 +147,42 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
 
         <div className="relative min-h-[520px] lg:min-h-[650px]">
           <div className="absolute -inset-12 rounded-full bg-[radial-gradient(circle,rgba(185,68,17,.17),transparent_65%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(255,173,112,.12),transparent_65%)]" aria-hidden="true" />
-          <div className="landing-product absolute left-1/2 top-1/2 w-[760px] max-w-[112%] -translate-x-1/2 -translate-y-1/2 rotate-[-2deg] overflow-hidden rounded-[28px] border border-black/10 bg-[#fcfbf8] shadow-[0_45px_100px_-40px_rgba(41,28,18,.45)] dark:border-white/10 dark:bg-[#1b1b18]">
-            <div className="flex h-12 items-center justify-between border-b border-black/8 px-5 dark:border-white/10">
-              <div className="flex gap-1.5"><span className="size-2.5 rounded-full bg-[#e76949]"/><span className="size-2.5 rounded-full bg-[#e6b65c]"/><span className="size-2.5 rounded-full bg-[#72ad7e]"/></div>
-              <div className="rounded-full bg-black/5 px-3 py-1 text-[10px] font-semibold text-black/45 dark:bg-white/8 dark:text-white/45">desigator / review</div>
-              <div className="size-6 rounded-full bg-[#b94411]/15" />
-            </div>
-            <div className="grid min-h-[470px] grid-cols-[135px_1fr_190px] sm:min-h-[540px] sm:grid-cols-[160px_1fr_220px]">
-              <aside className="border-r border-black/8 bg-[#f3efe7] p-4 dark:border-white/10 dark:bg-[#171714]">
-                <p className="mb-5 text-xs font-bold tracking-tight">Desigator<span className="text-[#b94411]">.</span></p>
-                {["Overview", t.mockCourse, "Students", "Results"].map((item, i) => <div key={item} className={`mb-2 rounded-lg px-3 py-2 text-[10px] font-medium ${i===1?'bg-white text-[#b94411] shadow-sm dark:bg-white/10 dark:text-[#ffad70]':'text-black/40 dark:text-white/40'}`}>{item}</div>)}
-              </aside>
-              <div className="p-5 sm:p-7">
-                <div className="mb-5 flex items-start justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#b94411] dark:text-[#ffad70]">{t.mockCourse}</p><h2 className="mt-1 text-lg font-semibold tracking-tight">{t.mockTask}</h2></div><span className="rounded-full bg-[#e8f3ed] px-2 py-1 text-[9px] font-semibold text-[#276347]">Final</span></div>
-                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-[#e9dfd3] dark:bg-[#27231f]">
-                  <div className="absolute inset-0 bg-[linear-gradient(135deg,#c94e19_0_28%,transparent_28%_40%,#1f2520_40%_61%,#ead6b5_61%)]" />
-                  <div className="absolute left-[14%] top-[18%] h-[62%] w-[36%] rotate-[-8deg] rounded-sm bg-[#f8f1e6] shadow-2xl"><div className="m-4 h-1/2 bg-[#171713]"/><p className="px-4 text-[8px] font-bold uppercase tracking-[.2em]">Form / Function</p></div>
-                  <div className="absolute bottom-[12%] right-[9%] size-[34%] rounded-full border-[18px] border-[#f5b354] bg-[#b94411] shadow-xl" />
-                </div>
-                <div className="mt-4 flex items-center justify-between"><div><p className="text-xs font-semibold">{t.mockStudent}</p><p className="mt-1 text-[9px] text-black/40 dark:text-white/40">{t.mockVersion}</p></div><div className="flex gap-1.5"><span className="flex size-7 items-center justify-center rounded-lg bg-black/5 dark:bg-white/8"><ImageIcon className="size-3"/></span><span className="flex size-7 items-center justify-center rounded-lg bg-black/5 dark:bg-white/8"><FileText className="size-3"/></span><span className="flex size-7 items-center justify-center rounded-lg bg-black/5 dark:bg-white/8"><Box className="size-3"/></span></div></div>
+          <div className="landing-product absolute left-1/2 top-1/2 w-[680px] max-w-[112%] -translate-x-1/2 -translate-y-1/2 rotate-[1.5deg] rounded-[30px] border border-black/10 bg-[#e7ddcd] p-5 shadow-[0_45px_100px_-40px_rgba(41,28,18,.5)] dark:border-white/10 dark:bg-[#25221d] sm:p-7">
+            <div className="relative min-h-[500px] overflow-hidden rounded-[22px] bg-[#d5c8b5] p-5 dark:bg-[#1b1a17] sm:min-h-[570px] sm:p-7">
+              <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(62,45,29,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(62,45,29,.12)_1px,transparent_1px)] [background-size:28px_28px]" aria-hidden="true" />
+              <div className="relative flex items-center justify-between text-[10px] font-bold uppercase tracking-[.2em] text-black/45 dark:text-white/45">
+                <span>Studio critique № 01</span><span>Florence · 1503</span>
               </div>
-              <aside className="border-l border-black/8 bg-white p-4 dark:border-white/10 dark:bg-[#20201d] sm:p-5">
-                <div className="flex items-center justify-between"><p className="text-xs font-semibold">{t.mockReview}</p><span className="text-sm font-bold text-[#b94411] dark:text-[#ffad70]">{t.mockScore}</span></div>
-                <div className="mt-6"><p className="text-[10px] font-semibold">{t.mockCriterion}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/8 dark:bg-white/10"><div className="h-full w-[84%] rounded-full bg-[#b94411] dark:bg-[#ffad70]"/></div><div className="mt-2 flex justify-between text-[8px] text-black/35 dark:text-white/35"><span>0</span><span>25</span></div></div>
-                <div className="mt-5 rounded-xl bg-[#f5f1ea] p-3 dark:bg-white/5"><MessageSquareText className="mb-2 size-3.5 text-[#b94411] dark:text-[#ffad70]"/><p className="text-[9px] leading-relaxed text-black/55 dark:text-white/55">{t.mockNote}</p></div>
-                <div className="mt-5 space-y-2">{[72,91,80].map((w,i)=><div key={i} className="h-8 rounded-lg border border-black/7 p-2 dark:border-white/10"><div className="h-1.5 rounded-full bg-black/8 dark:bg-white/10"><div className="h-full rounded-full bg-black/25 dark:bg-white/25" style={{width:`${w}%`}}/></div></div>)}</div>
-              </aside>
+
+              <div className="relative mx-auto mt-8 w-[64%] max-w-[330px] rotate-[-1deg] border-[10px] border-[#4a3020] bg-[#9b7b4e] p-2 shadow-[0_28px_45px_-20px_rgba(38,24,14,.7)] sm:border-[14px]">
+                <div className="relative aspect-[.78] overflow-hidden bg-[#66745d]">
+                  <div className="absolute inset-x-0 top-0 h-[42%] bg-[linear-gradient(165deg,#849487_0_34%,#a8a387_34%_46%,#687862_46%_62%,#b2a27c_62%)]" />
+                  <div className="absolute inset-x-0 bottom-0 h-[62%] bg-[linear-gradient(165deg,#5a5941,#9a8761_42%,#465344_43%)]" />
+                  <div className="absolute left-1/2 top-[18%] h-[38%] w-[52%] -translate-x-1/2 rounded-[48%_48%_42%_42%] bg-[#3d2c23]" />
+                  <div className="absolute left-1/2 top-[21%] h-[29%] w-[34%] -translate-x-1/2 rounded-[48%_48%_46%_46%] bg-[#c9aa7d] shadow-[inset_8px_-8px_0_rgba(92,58,37,.16)]">
+                    <span className="absolute left-[24%] top-[43%] h-[2px] w-[14%] rotate-[-4deg] rounded-full bg-[#49372c]" />
+                    <span className="absolute right-[24%] top-[43%] h-[2px] w-[14%] rotate-[4deg] rounded-full bg-[#49372c]" />
+                    <span className="absolute bottom-[24%] left-1/2 h-[5px] w-[25%] -translate-x-1/2 rounded-[50%] border-b border-[#6f4937]" />
+                  </div>
+                  <div className="absolute bottom-[-7%] left-1/2 h-[60%] w-[72%] -translate-x-1/2 rounded-[48%_48%_0_0] bg-[#28352c] shadow-[inset_22px_0_0_rgba(0,0,0,.12)]" />
+                  <div className="absolute bottom-[12%] left-[22%] h-[8%] w-[57%] rotate-[5deg] rounded-[50%] bg-[#b7956e] shadow-[0_5px_0_rgba(41,31,23,.24)]" />
+                </div>
+              </div>
+
+              <div className="landing-note absolute left-3 top-[23%] -rotate-[7deg] rounded-sm bg-[#f5cb57] px-4 py-3 text-[#2c2415] shadow-lg sm:left-7">
+                <p className="text-[9px] font-bold uppercase tracking-[.16em]">{locale === "en" ? "Composition" : "Kompozice"}</p><p className="mt-1 font-mono text-2xl font-bold">C−</p>
+              </div>
+              <div className="landing-note absolute right-2 top-[13%] rotate-[6deg] rounded-sm bg-[#e97a5f] px-4 py-3 text-[#31150f] shadow-lg sm:right-7">
+                <p className="text-[9px] font-bold uppercase tracking-[.16em]">{locale === "en" ? "Colour" : "Barvy"}</p><p className="mt-1 font-mono text-2xl font-bold">D</p>
+              </div>
+              <div className="landing-note absolute bottom-6 right-2 w-[210px] -rotate-[3deg] rounded-sm bg-[#f2eadb] p-4 text-[#2a251e] shadow-xl sm:bottom-8 sm:right-8 sm:w-[245px]">
+                <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#b94411]">{locale === "en" ? "Tutor note" : "Poznámka vedoucího"}</p>
+                <p className="mt-2 font-serif text-base italic leading-snug">“{t.mockNote}”</p>
+                <div className="mt-3 h-px bg-black/10"/><p className="mt-2 text-[9px] text-black/45">L. da Vinci · {locale === "en" ? "revision requested" : "vrátit k dopracování"}</p>
+              </div>
+              <div className="absolute bottom-8 left-6 -rotate-90 font-mono text-[9px] uppercase tracking-[.22em] text-black/35 dark:text-white/35 sm:left-10">Not final · probably</div>
             </div>
           </div>
-          <div className="landing-float absolute bottom-2 left-0 z-10 rounded-2xl border border-black/10 bg-white/85 p-4 shadow-xl backdrop-blur dark:border-white/10 dark:bg-[#24241f]/90 sm:left-4 lg:bottom-10"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-[#b94411] text-white"><UploadCloud className="size-4"/></span><div><p className="text-xs font-semibold">3D model uploaded</p><p className="mt-0.5 text-[10px] text-black/45 dark:text-white/45">chair-study-v4.glb · 18.4 MB</p></div></div></div>
         </div>
       </section>
 
