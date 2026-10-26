@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+coverage
+playwright-report
+test-results
+local-*
+.env
+.env.*
+db/*
+!db/desigator-export.sql
+skills
+.old
