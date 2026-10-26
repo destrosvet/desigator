@@ -11,13 +11,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import { authOptions } from "@/lib/auth";
+import { LandingArtCritique } from "@/components/landing-art-critique";
 
 type FeatureIcon = "layers" | "feedback" | "shield";
 type LandingCopy = {
   metaTitle: string; metaDescription: string; nav: [string, string][];
   login: string; app: string; eyebrow: string; titleA: string; titleB: string; intro: string;
   primary: string; signedPrimary: string; secondary: string; trust: string[];
-  mockNote: string;
   flowEyebrow: string; flowTitle: string; flowIntro: string;
   features: { title: string; text: string; icon: FeatureIcon }[];
   steps: [string, string, string][];
@@ -43,7 +43,6 @@ const copy: Record<"cs" | "en", LandingCopy> = {
     signedPrimary: "Pokračovat do aplikace",
     secondary: "Prohlédnout možnosti",
     trust: ["Vlastní data", "Privátní úložiště", "Bez vendor lock-inu"],
-    mockNote: "Není úplně jasné, jestli se směje.",
     flowEyebrow: "Jeden souvislý proces",
     flowTitle: "Od prvního briefu až po reflexi výsledků.",
     flowIntro: "Méně přepínání mezi disky, tabulkami a e-maily. Více času na práci, která studenty skutečně posouvá.",
@@ -78,7 +77,6 @@ const copy: Record<"cs" | "en", LandingCopy> = {
     intro: "Desigator brings briefs, submissions, visual previews, and fair assessment into one calm workspace.",
     primary: "Continue to sign in", signedPrimary: "Continue to workspace", secondary: "Explore the product",
     trust: ["Own your data", "Private storage", "No vendor lock-in"],
-    mockNote: "It is not entirely clear whether she is smiling.",
     flowEyebrow: "One connected workflow", flowTitle: "From the first brief to meaningful reflection.", flowIntro: "Less switching between drives, spreadsheets, and email. More time for the work that helps students grow.",
     features: [
       { title: "Work in context", text: "Review images, PDFs, video, and 3D models right beside criteria and feedback.", icon: "layers" },
@@ -145,45 +143,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
           </div>
         </div>
 
-        <div className="relative min-h-[520px] lg:min-h-[650px]">
-          <div className="absolute -inset-12 rounded-full bg-[radial-gradient(circle,rgba(185,68,17,.17),transparent_65%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(255,173,112,.12),transparent_65%)]" aria-hidden="true" />
-          <div className="landing-product absolute left-1/2 top-1/2 w-[680px] max-w-[112%] -translate-x-1/2 -translate-y-1/2 rotate-[1.5deg] rounded-[30px] border border-black/10 bg-[#e7ddcd] p-5 shadow-[0_45px_100px_-40px_rgba(41,28,18,.5)] dark:border-white/10 dark:bg-[#25221d] sm:p-7">
-            <div className="relative min-h-[500px] overflow-hidden rounded-[22px] bg-[#d5c8b5] p-5 dark:bg-[#1b1a17] sm:min-h-[570px] sm:p-7">
-              <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(62,45,29,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(62,45,29,.12)_1px,transparent_1px)] [background-size:28px_28px]" aria-hidden="true" />
-              <div className="relative flex items-center justify-between text-[10px] font-bold uppercase tracking-[.2em] text-black/45 dark:text-white/45">
-                <span>Studio critique № 01</span><span>Florence · 1503</span>
-              </div>
-
-              <div className="relative mx-auto mt-8 w-[64%] max-w-[330px] rotate-[-1deg] border-[10px] border-[#4a3020] bg-[#9b7b4e] p-2 shadow-[0_28px_45px_-20px_rgba(38,24,14,.7)] sm:border-[14px]">
-                <div className="relative aspect-[.78] overflow-hidden bg-[#66745d]">
-                  <div className="absolute inset-x-0 top-0 h-[42%] bg-[linear-gradient(165deg,#849487_0_34%,#a8a387_34%_46%,#687862_46%_62%,#b2a27c_62%)]" />
-                  <div className="absolute inset-x-0 bottom-0 h-[62%] bg-[linear-gradient(165deg,#5a5941,#9a8761_42%,#465344_43%)]" />
-                  <div className="absolute left-1/2 top-[18%] h-[38%] w-[52%] -translate-x-1/2 rounded-[48%_48%_42%_42%] bg-[#3d2c23]" />
-                  <div className="absolute left-1/2 top-[21%] h-[29%] w-[34%] -translate-x-1/2 rounded-[48%_48%_46%_46%] bg-[#c9aa7d] shadow-[inset_8px_-8px_0_rgba(92,58,37,.16)]">
-                    <span className="absolute left-[24%] top-[43%] h-[2px] w-[14%] rotate-[-4deg] rounded-full bg-[#49372c]" />
-                    <span className="absolute right-[24%] top-[43%] h-[2px] w-[14%] rotate-[4deg] rounded-full bg-[#49372c]" />
-                    <span className="absolute bottom-[24%] left-1/2 h-[5px] w-[25%] -translate-x-1/2 rounded-[50%] border-b border-[#6f4937]" />
-                  </div>
-                  <div className="absolute bottom-[-7%] left-1/2 h-[60%] w-[72%] -translate-x-1/2 rounded-[48%_48%_0_0] bg-[#28352c] shadow-[inset_22px_0_0_rgba(0,0,0,.12)]" />
-                  <div className="absolute bottom-[12%] left-[22%] h-[8%] w-[57%] rotate-[5deg] rounded-[50%] bg-[#b7956e] shadow-[0_5px_0_rgba(41,31,23,.24)]" />
-                </div>
-              </div>
-
-              <div className="landing-note absolute left-3 top-[23%] -rotate-[7deg] rounded-sm bg-[#f5cb57] px-4 py-3 text-[#2c2415] shadow-lg sm:left-7">
-                <p className="text-[9px] font-bold uppercase tracking-[.16em]">{locale === "en" ? "Composition" : "Kompozice"}</p><p className="mt-1 font-mono text-2xl font-bold">C−</p>
-              </div>
-              <div className="landing-note absolute right-2 top-[13%] rotate-[6deg] rounded-sm bg-[#e97a5f] px-4 py-3 text-[#31150f] shadow-lg sm:right-7">
-                <p className="text-[9px] font-bold uppercase tracking-[.16em]">{locale === "en" ? "Colour" : "Barvy"}</p><p className="mt-1 font-mono text-2xl font-bold">D</p>
-              </div>
-              <div className="landing-note absolute bottom-6 right-2 w-[210px] -rotate-[3deg] rounded-sm bg-[#f2eadb] p-4 text-[#2a251e] shadow-xl sm:bottom-8 sm:right-8 sm:w-[245px]">
-                <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#b94411]">{locale === "en" ? "Tutor note" : "Poznámka vedoucího"}</p>
-                <p className="mt-2 font-serif text-base italic leading-snug">“{t.mockNote}”</p>
-                <div className="mt-3 h-px bg-black/10"/><p className="mt-2 text-[9px] text-black/45">L. da Vinci · {locale === "en" ? "revision requested" : "vrátit k dopracování"}</p>
-              </div>
-              <div className="absolute bottom-8 left-6 -rotate-90 font-mono text-[9px] uppercase tracking-[.22em] text-black/35 dark:text-white/35 sm:left-10">Not final · probably</div>
-            </div>
-          </div>
-        </div>
+        <LandingArtCritique locale={locale} />
       </section>
 
       <section id="features" className="scroll-mt-10 border-y border-black/8 bg-white/55 py-24 dark:border-white/10 dark:bg-white/[.025] sm:py-32">
