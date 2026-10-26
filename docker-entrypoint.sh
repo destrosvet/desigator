@@ -22,5 +22,8 @@ node scripts/check-migration-safety.mjs
 echo "🔄 Spouštím Prisma migrate deploy..."
 ./node_modules/.bin/prisma migrate deploy
 
+echo "Ensuring the initial administrator exists..."
+node scripts/ensure-admin.mjs
+
 echo "🚀 Spouštím aplikaci..."
 exec node server.js

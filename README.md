@@ -94,7 +94,7 @@ npm run build
 
 ## Production deployment
 
-The recommended production path is Docker with PostgreSQL and private S3-compatible storage. Database migrations run through `prisma migrate deploy`; production startup does not run the demo seed.
+The recommended production path is Docker with PostgreSQL and private S3-compatible storage. Database migrations run through `prisma migrate deploy`; production startup does not run the demo seed. Docker deployments create the initial global administrator idempotently from `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optional `ADMIN_NAME` environment variables.
 
 - [General production and backup guidance](DEPLOYMENT.md)
 - [Coolify deployment through a GitHub App](COOLIFY-DEPLOY.md)

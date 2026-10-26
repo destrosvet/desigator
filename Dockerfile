@@ -40,7 +40,7 @@ COPY --from=builder --chown=node:node /app/public ./public
 
 # Scripts
 COPY --from=builder --chown=node:node /app/package.json ./
-COPY --from=builder --chown=node:node /app/scripts/check-deployment.mjs /app/scripts/check-migration-safety.mjs ./scripts/
+COPY --from=builder --chown=node:node /app/scripts/check-deployment.mjs /app/scripts/check-migration-safety.mjs /app/scripts/ensure-admin.mjs ./scripts/
 
 ENV NODE_ENV=production
 ENV PORT=3000

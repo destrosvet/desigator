@@ -6,9 +6,11 @@ The stack does not publish host ports. Coolify handles routing through its proxy
 
 Set the application values shown in `.env.coolify.example` under **Configuration → Environment Variables**. The PostgreSQL password is generated automatically and must not be replaced with a hard-coded value.
 
+For a fresh database, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optionally `ADMIN_NAME` define the initial global administrator. After migrations, every application start checks this account idempotently: it creates a missing administrator and leaves an existing administrator unchanged. Changing `ADMIN_PASSWORD` later does not reset an existing password.
+
 MinIO is not part of the stack. Configure the existing server storage through `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`. The bucket must remain private and the application key needs read and write access.
 
-Normal deployment only runs database migrations. It creates no school, accounts, or demo data.
+Normal deployment runs database migrations and creates only the configured initial administrator. It creates no school or demo data, so every installation starts ready for its own institution.
 
 ## Optional one-time VUT bootstrap
 
