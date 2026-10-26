@@ -23,12 +23,5 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ lo
   });
   if (!targetClass) notFound();
 
-  const candidates = session.user.role === "STUDENT" ? [] : await db.user.findMany({
-    where: { role: "STUDENT", organizationId: targetClass.organizationId, isActive: true, classMemberships: { none: { classId: id } } },
-    select: { id: true, name: true, email: true },
-    orderBy: { name: "asc" },
-    take: 500,
-  });
-
-  return <ClassDetailClient locale={locale} role={session.user.role} targetClass={JSON.parse(JSON.stringify({ ...targetClass, subjects: targetClass.subjectLinks.map((link) => link.subject) }))} candidates={candidates} />;
+  return <ClassDetailClient locale={locale} role={session.user.role} targetClass={JSON.parse(JSON.stringify({ ...targetClass, subjects: targetClass.subjectLinks.map((link) => link.subject) }))} />;
 }

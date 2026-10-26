@@ -320,5 +320,35 @@
     "dark": "Tmavý",
     "system": "Podle systému",
     "logout": "Odhlásit se"
+  },
+  "studentTransfer": {
+    "title": "Přesunout studenty do jiné skupiny",
+    "action": "Přesunout do jiné skupiny",
+    "selected": "Vybraní studenti ({count})",
+    "source": "Původní skupina",
+    "target": "Cílová skupina",
+    "chooseSource": "Vyberte původní skupinu",
+    "chooseTarget": "Vyberte cílovou skupinu",
+    "description": "Studenti budou odebráni pouze z vybrané původní skupiny a přidáni do cílové skupiny. Ostatní členství zůstanou zachovaná. Práce, hodnocení a korekce zůstávají u původních zadání a předmětů; nepřevádějí se na zadání nové skupiny.",
+    "existing": "Pokud už je student v cílové skupině, druhé členství se nevytvoří.",
+    "empty": "Není dostupná jiná skupina ve stejné škole, kterou můžete spravovat.",
+    "loading": "Načítání skupin…",
+    "cancel": "Zrušit",
+    "confirm": "Potvrdit přesun",
+    "busy": "Přesouvání…",
+    "success": "Přesunuto studentů: {count}",
+    "selectAll": "Vybrat všechny studenty",
+    "select": "Vybrat studenta: {name}",
+    "errors": {
+      "unauthorized": "Přihlaste se znovu.",
+      "forbidden": "Nemáte oprávnění spravovat obě skupiny.",
+      "sameClass": "Zvolte jinou cílovou skupinu.",
+      "differentSchool": "Studenty lze přesouvat jen mezi skupinami stejné školy.",
+      "membershipChanged": "Členství nebo stav některého studenta se změnily. Obnovte seznam; nikdo nebyl přesunut.",
+      "invalidRequest": "Vyberte 1 až 200 různých studentů a cílovou skupinu.",
+      "transferFailed": "Přesun se nezdařil. Zkuste to znovu.",
+      "loadFailed": "Skupiny se nepodařilo načíst. Zavřete okno a zkuste to znovu."
+    },
+    "noSource": "Vybraní studenti nemají společnou původní skupinu. Vyfiltrujte jednu třídu nebo upravte výběr."
   }
 }

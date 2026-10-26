@@ -320,5 +320,35 @@
     "dark": "Dark",
     "system": "System",
     "logout": "Sign out"
+  },
+  "studentTransfer": {
+    "title": "Move students to another group",
+    "action": "Move to another group",
+    "selected": "Selected students ({count})",
+    "source": "Source group",
+    "target": "Destination group",
+    "chooseSource": "Select the source group",
+    "chooseTarget": "Select the destination group",
+    "description": "Students will be removed only from the selected source group and added to the destination group. Other memberships are preserved. Work, evaluations and adjustments remain with the original assignments and subjects; they are not transferred to assignments in the new group.",
+    "existing": "Students who already belong to the destination group will not get duplicate memberships.",
+    "empty": "There are no other groups in the same school that you can manage.",
+    "loading": "Loading groups…",
+    "cancel": "Cancel",
+    "confirm": "Confirm move",
+    "busy": "Moving…",
+    "success": "Students moved: {count}",
+    "selectAll": "Select all students",
+    "select": "Select student: {name}",
+    "errors": {
+      "unauthorized": "Please sign in again.",
+      "forbidden": "You must have permission to manage both groups.",
+      "sameClass": "Select a different destination group.",
+      "differentSchool": "Students can only move between groups in the same school.",
+      "membershipChanged": "A student’s membership or status has changed. Refresh the list; nobody was moved.",
+      "invalidRequest": "Select 1–200 different students and a destination group.",
+      "transferFailed": "The move failed. Please try again.",
+      "loadFailed": "Could not load groups. Close the dialog and try again."
+    },
+    "noSource": "The selected students do not share a source group. Filter by one class or change your selection."
   }
 }

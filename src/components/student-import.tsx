@@ -13,7 +13,7 @@ type Sheet = { name: string; rows: string[][] };
 type Mapping = { name: string; first: string; last: string; email: string; externalId: string };
 type Result = { created: number; added: number; skipped: number; filled: number; credentials: { email: string; password: string }[] };
 const emptyMapping: Mapping = { name: "", first: "", last: "", email: "", externalId: "" };
-export function StudentImport({ classId, className }: { classId: string; className: string }) {
+export function StudentImport({ classId, className, onImported }: { classId: string; className: string; onImported?: () => void }) {
   const router = useRouter(); const fileInput = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false); const [sheets, setSheets] = useState<Sheet[]>([]);
   const [sheet, setSheet] = useState(0); const [header, setHeader] = useState(1);
@@ -49,7 +49,7 @@ export function StudentImport({ classId, className }: { classId: string; classNa
       if (!selected.length || selected.length > 200) throw new Error("Vyberte 1 až 200 studentů v jedné dávce.");
       const res = await fetch("/api/classes/" + classId + "/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: selected, confirmed: committing, expected: preview?.expected }) }); const data = await res.json();
       if (!res.ok) { if (committing) setPreview(null); throw new Error(data.error); }
-      if (committing) { setResult(data); setConfirm(false); router.refresh(); }
+      if (committing) { setResult(data); setConfirm(false); onImported?.(); router.refresh(); }
       else setPreview(data);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Import selhal."); setConfirm(false); }
     finally { setBusy(false); }

@@ -1,6 +1,7 @@
 "use client";
 
 import { PublicResultsControl } from "@/components/public-results-control";
+import { StudentList } from "@/components/student-list";
 import { StudentImport } from "@/components/student-import";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Student = { id: string; name: string; email: string; externalId?: string | null };
 type ClassDetail = {
@@ -20,28 +20,14 @@ type ClassDetail = {
   subjects: Array<{ id: string; name: string; code: string; year: number; semester: string }>;
 };
 
-export function ClassDetailClient({ targetClass, candidates, role, locale }: { targetClass: ClassDetail; candidates: Student[]; role: string; locale: string }) {
+export function ClassDetailClient({ targetClass, role, locale }: { targetClass: ClassDetail; role: string; locale: string }) {
   const router = useRouter();
-  const [studentId, setStudentId] = useState("");
+  const [studentRevision, setStudentRevision] = useState(0);
   const [message, setMessage] = useState("");
   const [promotionName, setPromotionName] = useState(targetClass.name);
   const [promotionYear, setPromotionYear] = useState((targetClass.academicYear ?? new Date().getFullYear()) + 1);
   const [promoting, setPromoting] = useState(false);
   const canManage = role === "ADMIN" || role === "TEACHER";
-
-  async function changeMember(method: "POST" | "DELETE", id: string) {
-    const response = await fetch(`/api/classes/${targetClass.id}/students`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId: id }),
-    });
-    const result = await response.json();
-    setMessage(response.ok ? "Členství bylo upraveno." : result.error || "Operace selhala.");
-    if (response.ok) {
-      setStudentId("");
-      router.refresh();
-    }
-  }
 
   async function promoteClass() {
     setPromoting(true); setMessage("");
@@ -61,6 +47,7 @@ export function ClassDetailClient({ targetClass, candidates, role, locale }: { t
   return (
     <AppShell>
       <div className="space-y-6">
+        {message ? <p role="alert" className="text-destructive">{message}</p> : null}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{targetClass.name}</h1><Badge variant="outline">{targetClass.code}</Badge></div><p className="text-muted-foreground">{targetClass.description || "Bez popisu"}</p>{targetClass.academicYear ? <p className="text-sm text-muted-foreground">Akademický rok {targetClass.academicYear}/{String(targetClass.academicYear + 1).slice(-2)}</p> : null}</div>
           {!canManage ? <Button variant="destructive" onClick={leaveClass}>Opustit třídu</Button> : null}
@@ -72,16 +59,11 @@ export function ClassDetailClient({ targetClass, candidates, role, locale }: { t
 
         {canManage ? <Card><CardHeader><CardTitle>Další akademický rok</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Vytvoří novou studijní skupinu a zkopíruje do ní všech {targetClass.students.length} studentů. Předměty, práce a výsledky zůstanou v tomto roce.</p><div className="grid gap-3 sm:grid-cols-[1fr_10rem_auto]"><div className="space-y-2"><Label htmlFor="promotion-name">Název nové skupiny</Label><Input id="promotion-name" value={promotionName} onChange={(event) => setPromotionName(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="promotion-year">Začátek roku</Label><Input id="promotion-year" type="number" min={2000} max={2100} value={promotionYear} onChange={(event) => setPromotionYear(Number(event.target.value))} /></div><Button className="self-end" disabled={promoting || !promotionName.trim()} onClick={() => void promoteClass()}>{promoting ? "Vytváření…" : "Postoupit skupinu"}</Button></div></CardContent></Card> : null}
 
-        <Card>
-          <CardHeader><CardTitle>Studenti ({targetClass.students.length})</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {canManage && <StudentImport classId={targetClass.id} className={targetClass.name} />}
-            {canManage && candidates.length ? <div className="flex flex-wrap items-end gap-2"><div className="min-w-64 flex-1 space-y-2"><Label>Přidat studenta</Label><Select value={studentId} onValueChange={setStudentId}><SelectTrigger><SelectValue placeholder="Vyberte studenta" /></SelectTrigger><SelectContent>{candidates.map((student) => <SelectItem key={student.id} value={student.id}>{student.name} · {student.email}</SelectItem>)}</SelectContent></Select></div><Button onClick={() => changeMember("POST", studentId)} disabled={!studentId}>Přidat</Button></div> : null}
-            {targetClass.students.map(({ student }) => <div key={student.id} className="flex items-center justify-between gap-3 border-b py-3"><div><p className="font-medium">{student.name}</p><p className="text-sm text-muted-foreground">{student.email}{student.externalId ? ` · ${student.externalId}` : ""}</p></div>{canManage ? <Button variant="outline" size="sm" onClick={() => changeMember("DELETE", student.id)}>Odebrat</Button> : null}</div>)}
-            {!targetClass.students.length ? <p className="text-muted-foreground">Třída zatím nemá studenty.</p> : null}
-            {message ? <p role="status" className="text-sm">{message}</p> : null}
-          </CardContent>
-        </Card>
+        {canManage ? <section aria-label="Studenti třídy" className="space-y-4">
+          <h2 className="text-xl font-semibold">Studenti</h2>
+          <StudentImport classId={targetClass.id} className={targetClass.name} onImported={() => setStudentRevision(value => value + 1)} />
+          <StudentList fixedClassId={targetClass.id} fixedClassName={targetClass.name} refreshVersion={studentRevision} />
+        </section> : <Card><CardHeader><CardTitle>Studenti ({targetClass.students.length})</CardTitle></CardHeader><CardContent className="space-y-2">{targetClass.students.map(({ student }) => <p key={student.id}>{student.name}</p>)}</CardContent></Card>}
 
         {canManage && targetClass.subjects.length > 0 && <Card><CardHeader><CardTitle>Přehled výsledků a známek</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{targetClass.subjects.map(subject=><Button key={subject.id} variant="outline" onClick={()=>router.push(`/${locale}/subjects/${subject.id}/results`)}>{subject.name} · {subject.year}</Button>)}</CardContent></Card>}
 
