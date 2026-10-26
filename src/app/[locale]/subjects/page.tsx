@@ -67,6 +67,7 @@ export default function SubjectsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classId: "" });
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [years, setYears] = useState<number[]>([]);
@@ -117,6 +118,11 @@ export default function SubjectsPage() {
   }, [fetchSubjects]);
 
   const handleCreate = async () => {
+    setCreateError("");
+    if (!form.classId) {
+      setCreateError("Vyberte třídu, do které předmět patří.");
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch("/api/subjects", {
@@ -124,13 +130,14 @@ export default function SubjectsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (res.ok) {
-        setDialogOpen(false);
-        setForm({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classId: "" });
-        fetchSubjects();
+      if (!res.ok) {
+        throw new Error(res.status === 403 ? "Vybraná třída už neexistuje nebo k ní nemáte přístup." : "Předmět se nepodařilo vytvořit.");
       }
+      setDialogOpen(false);
+      setForm({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classId: "" });
+      void fetchSubjects();
     } catch (error) {
-      console.error(error);
+      setCreateError(error instanceof Error ? error.message : "Předmět se nepodařilo vytvořit.");
     } finally {
       setCreating(false);
     }
@@ -199,7 +206,7 @@ export default function SubjectsPage() {
             <p className="text-muted-foreground mt-1">Správa předmětů a semestrů</p>
           </div>
           {canCreate && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setCreateError(""); }}>
               <DialogTrigger asChild>
                 <Button><Plus className="w-4 h-4 mr-2" />Nový předmět</Button>
               </DialogTrigger>
@@ -208,6 +215,14 @@ export default function SubjectsPage() {
                 <div className="space-y-4">
                   <div className="space-y-2"><Label>Název</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Popis</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subject-class">Třída</Label>
+                    <Select value={form.classId} onValueChange={(classId) => { setForm({ ...form, classId }); setCreateError(""); }} disabled={!classes.length}>
+                      <SelectTrigger id="subject-class"><SelectValue placeholder="Vyberte třídu" /></SelectTrigger>
+                      <SelectContent>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {!classes.length && <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Nejdřív je potřeba založit třídu. <button type="button" className="font-medium text-primary underline" onClick={() => router.push(`/${locale}/classes`)}>Přejít ke třídám</button></div>}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Semestr</Label>
                       <Select value={form.semester} onValueChange={(v) => setForm({ ...form, semester: v })}>
@@ -221,7 +236,8 @@ export default function SubjectsPage() {
                     </div>
                     <div className="space-y-2"><Label>Rok</Label><Input type="number" value={form.year} onChange={(e) => setForm({ ...form, year: parseInt(e.target.value) || 2025 })} /></div>
                   </div>
-                  <Button onClick={handleCreate} disabled={creating || !form.name} className="w-full">
+                  {createError && <p role="alert" className="text-sm text-destructive">{createError}</p>}
+                  <Button onClick={handleCreate} disabled={creating || !form.name.trim() || !form.classId} className="w-full">
                     {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{t("create")}
                   </Button>
                 </div>
