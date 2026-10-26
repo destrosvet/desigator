@@ -1,0 +1,19 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const m = vi.hoisted(() => ({ session: vi.fn(), manage: vi.fn(), transaction: vi.fn(), lock: vi.fn(), task: vi.fn(), update: vi.fn(), count: vi.fn(), remove: vi.fn(), criterionUpdate: vi.fn(), criterionCreate: vi.fn() }));
+vi.mock("next-auth", () => ({ getServerSession: m.session }));
+vi.mock("@/lib/auth", () => ({ authOptions: {} }));
+vi.mock("@/lib/authorization", () => ({ canManageTask: m.manage, canViewTask: vi.fn() }));
+vi.mock("@/lib/db", () => ({ db: { $transaction: m.transaction } }));
+import { PATCH } from "@/app/api/tasks/[id]/route";
+function request(data: unknown) { return PATCH(new Request("http://localhost/api/tasks/t1", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }), { params: Promise.resolve({ id: "t1" }) }); }
+describe("task editing and rubric protection", () => {
+ beforeEach(() => { vi.resetAllMocks(); m.session.mockResolvedValue({ user: { id: "teacher", role: "TEACHER" } }); m.manage.mockResolvedValue(true); m.task.mockResolvedValue({ id: "t1", maxPoints: 100, status: "DRAFT", criteria: [{ id: "c1", name: "Kompozice", maxPoints: 100, order: 0 }] }); m.count.mockResolvedValue(0); m.update.mockResolvedValue({ id: "t1" }); m.transaction.mockImplementation(async (run) => run({ $queryRaw: m.lock, task: { findUnique: m.task, update: m.update }, evaluation: { count: m.count }, evaluationCriterion: { deleteMany: m.remove, update: m.criterionUpdate, create: m.criterionCreate } })); });
+ it("rejects edits outside the teacher scope", async () => { m.manage.mockResolvedValue(false); expect((await request({ title: "Other" })).status).toBe(403); expect(m.transaction).not.toHaveBeenCalled(); });
+ it("rejects mismatched totals before changing criteria", async () => { expect((await request({ criteria: [{ id: "c1", name: "Kompozice", maxPoints: 80 }] })).status).toBe(400); expect(m.remove).not.toHaveBeenCalled(); expect(m.update).not.toHaveBeenCalled(); });
+ it("refuses publishing without criteria", async () => { m.task.mockResolvedValue({ id: "t1", maxPoints: 100, status: "DRAFT", criteria: [] }); expect((await request({ status: "PUBLISHED" })).status).toBe(400); expect(m.update).not.toHaveBeenCalled(); });
+ it("keeps existing criterion IDs and persists the supplied order", async () => { expect((await request({ criteria: [{ name: "Technika", maxPoints: 40 }, { id: "c1", name: "Kompozice", maxPoints: 60 }] })).status).toBe(200); expect(m.criterionCreate).toHaveBeenCalledWith({ data: { taskId: "t1", name: "Technika", maxPoints: 40, order: 0 } }); expect(m.criterionUpdate).toHaveBeenCalledWith({ where: { id: "c1" }, data: { name: "Kompozice", maxPoints: 60, order: 1 } }); expect(m.lock).toHaveBeenCalledOnce(); });
+ it("rejects foreign criterion IDs", async () => { expect((await request({ criteria: [{ id: "foreign", name: "Foreign", maxPoints: 100 }] })).status).toBe(400); expect(m.remove).not.toHaveBeenCalled(); });
+ it("locks criteria and maximum once any evaluation exists", async () => { m.count.mockResolvedValue(1); expect((await request({ maxPoints: 50 })).status).toBe(409); expect((await request({ criteria: [{ id: "c1", name: "Changed", maxPoints: 100 }] })).status).toBe(409); expect(m.update).not.toHaveBeenCalled(); expect(m.remove).not.toHaveBeenCalled(); });
+ it("still permits changing the deadline when grading is assigned", async () => { m.count.mockResolvedValue(1); expect((await request({ deadline: "2026-12-01T12:00:00.000Z" })).status).toBe(200); expect(m.update.mock.calls[0][0].data.deadline).toEqual(new Date("2026-12-01T12:00:00.000Z")); });
+ it("rejects fractional points and duplicate criterion names", async () => { expect((await request({ maxPoints: 1.5 })).status).toBe(400); expect((await request({ criteria: [{ name: "Typografie", maxPoints: 50 }, { name: " typografie ", maxPoints: 50 }] })).status).toBe(400); expect(m.transaction).not.toHaveBeenCalled(); });
+});

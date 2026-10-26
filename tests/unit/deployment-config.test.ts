@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { checkDeployment } from "../../scripts/check-deployment.mjs";
+const valid = { APP_URL: "https://school.example", NEXTAUTH_URL: "https://school.example", AUTH_SECRET: "isolated-test-secret-with-more-than-32-characters", DATABASE_URL: "postgresql://release:private-db-password@db:5432/release", S3_ENDPOINT: "https://storage.example", S3_BUCKET: "private", S3_ACCESS_KEY_ID: "test-key", S3_SECRET_ACCESS_KEY: "isolated-storage-secret", S3_FORCE_PATH_STYLE: "true", RESEND_API_KEY: "test-mail-key", RESEND_FROM: "School <noreply@school.example>" };
+describe("deployment preflight", () => {
+ it("accepts aligned production origins and complete configuration", () => expect(checkDeployment(valid).errors).toEqual([]));
+ it.each([{ APP_URL: "http://school.example" }, { NEXTAUTH_URL: "https://foreign.example" }, { AUTH_SECRET: "replace-this" }, { NEXTAUTH_SECRET: "a-different-long-secret-for-testing-purposes" }, { S3_BUCKET: "" }, { RESEND_API_KEY: "" }, { S3_FORCE_PATH_STYLE: "yes" }, { APP_URL: "https://school.example/private" }])("rejects invalid production configuration without disclosing values: %j", (change) => { const { errors } = checkDeployment({ ...valid, ...change }); expect(errors.length).toBeGreaterThan(0); expect(errors.join(" ")).not.toContain(valid.S3_SECRET_ACCESS_KEY); expect(errors.join(" ")).not.toContain(valid.DATABASE_URL); });
+ it("permits isolated localhost checks and explicitly reports missing recovery email", () => { const result = checkDeployment({ ...valid, APP_URL: "http://127.0.0.1:3000", NEXTAUTH_URL: "http://127.0.0.1:3000", RESEND_API_KEY: "" }); expect(result.errors).toEqual([]); expect(result.warnings).toHaveLength(1); });
+});

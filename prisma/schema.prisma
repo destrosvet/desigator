@@ -1,0 +1,516 @@
+// ============================================
+// DESIGATOR - LMS / Task Management System
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMY
+// ============================================
+
+enum UserRole {
+  ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  EVALUATOR
+  STUDENT
+}
+
+enum TaskStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  EVALUATED
+  RETURNED
+}
+
+enum EvaluationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SemesterType {
+  FULL_YEAR
+  SUMMER
+  WINTER
+}
+
+// ============================================
+// UŽIVATELÉ
+// ============================================
+
+model User {
+  resultAdjustments PointAdjustment[] @relation("AdjustmentStudent")
+  issuedAdjustments PointAdjustment[] @relation("AdjustmentAuthor")
+  revokedAdjustments PointAdjustment[] @relation("AdjustmentRevoker")
+  id         String   @id @default(cuid())
+  legacyId   Int?     // staré MySQL user_id pro migraci
+  email      String   @unique
+  externalId String? // školní ID pro párování souborů
+  sessionVersion Int @default(0)
+  passwordResetTokens PasswordResetToken[]
+  consultationComments ConsultationComment[]
+  publishedResults Submission[] @relation("ResultsPublisher")
+  password   String   // hashované via bcrypt
+  name       String
+  role       UserRole @default(STUDENT) // kompatibilní hlavní role; oprávnění jsou v roles
+  roles      UserRole[] @default([])
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  issuedInvitations OrganizationInvitation[]
+  historicalCourses HistoricalCourse[]
+  institution String? // volitelná škola nebo instituce v profilu
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Učitel/Hodnotitel: vytvořené tasky
+  createdTasks Task[] @relation("TaskCreator")
+  assignmentTemplates AssignmentTemplate[]
+
+  // Učitel: vytvořené předměty
+  createdSubjects Subject[] @relation("SubjectCreator")
+
+  // Hodnotitel: přiřazené evaluace
+  evaluations Evaluation[] @relation("EvaluatorUser")
+
+  // Student: odevzdání
+  submissions Submission[] @relation("StudentSubmissions")
+
+  // Třídy kde je studentem
+  classMemberships ClassStudent[]
+
+  // Třídy kde je učitelem
+  taughtClasses Class[] @relation("ClassTeacher")
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId])
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+// ============================================
+// TŘÍDY / SKUPINY
+// ============================================
+
+model Organization {
+  gradingScale Json @default("{\"type\":\"ECTS\",\"thresholds\":[90,80,70,60,50]}")
+  id String @id @default(cuid())
+  name String
+  createdAt DateTime @default(now())
+  users User[]
+  classes Class[]
+  invitations OrganizationInvitation[]
+  historicalImports HistoricalImport[]
+
+  @@map("organizations")
+}
+
+model OrganizationInvitation {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email String
+  roles UserRole[]
+  tokenHash String @unique
+  createdById String
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("organization_invitations")
+}
+
+model ResultsShare {
+  classId String @id
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  token String @unique
+  createdAt DateTime @default(now())
+  @@map("results_shares")
+}
+
+model Class {
+  resultsShare ResultsShare?
+  publicResultsEnabled Boolean @default(false)
+  organizationId String @default("legacy")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  code        String   @unique // unikátní kód pro připojení
+  teacherId   String
+  teacher     User     @relation("ClassTeacher", fields: [teacherId], references: [id])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Studenti ve třídě
+  students ClassStudent[]
+
+  // Předměty v rámci třídy
+  subjects Subject[]
+
+  @@index([organizationId])
+  @@index([code])
+  @@index([teacherId])
+  @@map("classes")
+}
+
+model ClassStudent {
+  id        String   @id @default(cuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([classId, studentId])
+  @@index([classId])
+  @@index([studentId])
+  @@map("class_students")
+}
+
+// ============================================
+// PŘEDMĚTY
+// ============================================
+
+model Subject {
+  pointAdjustments PointAdjustment[]
+  id          String       @id @default(cuid())
+  code        String       @default("") // zkratka předmětu (např. PRG, WEB, DBS)
+  name        String
+  description String?
+  semester    SemesterType @default(FULL_YEAR)
+  year        Int          // např. 2025
+  classId     String
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacherId   String       // učitel předmětu
+  teacher     User         @relation("SubjectCreator", fields: [teacherId], references: [id])
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Tasky v rámci předmětu
+  tasks Task[]
+
+  @@index([classId])
+  @@index([teacherId])
+  @@index([year])
+  @@index([semester])
+  @@map("subjects")
+}
+
+// ============================================
+// TASKY / ZADÁNÍ
+// ============================================
+
+model Task {
+  id          String     @id @default(cuid())
+  legacyId    Int?       // staré MySQL task_id pro migraci
+  title       String
+  description String?    @db.Text
+  instructions String?   @db.Text
+  maxPoints   Int        @default(100)
+  deadline    DateTime?
+  status      TaskStatus @default(DRAFT)
+  creatorId   String
+  creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
+  subjectId   String
+  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  isTemplate  Boolean    @default(false) // pro duplikaci
+  templateId  String?    // odkaz na původní task při duplikaci
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Přílohy k zadání
+  attachments Attachment[] @relation("TaskAttachments")
+
+  imports BulkSubmissionImport[]
+
+  // Odevzdání
+  submissions Submission[]
+
+  // Kritéria hodnocení
+  criteria EvaluationCriterion[]
+
+  @@index([creatorId])
+  @@index([subjectId])
+  @@index([status])
+  @@index([isTemplate])
+  @@map("tasks")
+}
+
+// ============================================
+// KRITÉRIA HODNOCENÍ
+// ============================================
+
+model EvaluationCriterion {
+  id          String @id @default(cuid())
+  taskId      String
+  task        Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  maxPoints   Int
+  order       Int    @default(0)
+
+  // Konkrétní hodnocení tohoto kritéria
+  scores CriterionScore[]
+
+  @@index([taskId])
+  @@map("evaluation_criteria")
+}
+
+// ============================================
+// ODEVZDÁNÍ
+// ============================================
+
+enum SubmissionStage {
+  WIP
+  FINAL
+}
+
+model Submission {
+  resultsPublishedAt DateTime?
+  resultsPublishedById String?
+  resultsPublishedBy User? @relation("ResultsPublisher", fields: [resultsPublishedById], references: [id], onDelete: SetNull)
+  version     Int              @default(1)
+  stage       SubmissionStage  @default(FINAL)
+  uploadedById String?
+  changeNote  String?
+  id          String           @id @default(cuid())
+  taskId      String
+  task        Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User             @relation("StudentSubmissions", fields: [studentId], references: [id])
+  content     String?          @db.Text // textové odevzdání
+  status      SubmissionStatus @default(SUBMITTED)
+  submittedAt DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Přílohy odevzdání
+  attachments Attachment[] @relation("SubmissionAttachments")
+
+  consultationComments ConsultationComment[]
+
+  // Hodnocení
+  evaluations Evaluation[]
+
+
+  @@unique([taskId, studentId, version])
+  @@index([taskId])
+  @@index([studentId])
+  @@index([status])
+  @@map("submissions")
+}
+
+// ============================================
+// HODNOCENÍ
+// ============================================
+
+model Evaluation {
+  id          String           @id @default(cuid())
+  submissionId String
+  submission  Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  evaluatorId String
+  evaluator   User             @relation("EvaluatorUser", fields: [evaluatorId], references: [id])
+  totalPoints Int?
+  feedback    String?          @db.Text
+  status      EvaluationStatus @default(PENDING)
+  evaluatedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Skóre jednotlivých kritérií
+  scores CriterionScore[]
+
+  @@unique([submissionId, evaluatorId])
+  @@index([submissionId])
+  @@index([evaluatorId])
+  @@index([status])
+  @@map("evaluations")
+}
+
+model CriterionScore {
+  id          String  @id @default(cuid())
+  evaluationId String
+  evaluation  Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  criterionId String
+  criterion   EvaluationCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  points      Int
+  comment     String?
+
+  @@unique([evaluationId, criterionId])
+  @@map("criterion_scores")
+}
+
+// ============================================
+// PŘÍLOHY (S3)
+// ============================================
+
+model Attachment {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int
+  s3Key       String   @unique
+  s3Url       String
+  taskId      String?
+  task        Task?    @relation("TaskAttachments", fields: [taskId], references: [id], onDelete: SetNull)
+  submissionId String?
+  submission  Submission? @relation("SubmissionAttachments", fields: [submissionId], references: [id], onDelete: SetNull)
+  uploadedAt  DateTime @default(now())
+
+  @@index([taskId])
+  @@index([submissionId])
+  @@map("attachments")
+}
+
+model AssignmentTemplate {
+  id String @id @default(cuid())
+  creatorId String
+  creator User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title String
+  description String? @db.Text
+  instructions String? @db.Text
+  maxPoints Int @default(100)
+  criteria Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId])
+  @@map("assignment_templates")
+}
+
+
+model HistoricalImport {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sourceHash String
+  sourceName String
+  report Json
+  createdAt DateTime @default(now())
+  courses HistoricalCourse[]
+  tasks HistoricalTask[]
+  @@unique([organizationId, sourceHash])
+  @@map("historical_imports")
+}
+model HistoricalCourse {
+  id String @id @default(cuid())
+  importId String
+  import HistoricalImport @relation(fields: [importId], references: [id], onDelete: Restrict)
+  legacyId Int
+  code String
+  name String
+  year Int?
+  semester String
+  teacherId String?
+  teacher User? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  tasks HistoricalTask[]
+  @@unique([importId, legacyId])
+  @@index([teacherId])
+  @@map("historical_courses")
+}
+model HistoricalTask {
+  id String @id @default(cuid())
+  importId String
+  import HistoricalImport @relation(fields: [importId], references: [id], onDelete: Restrict)
+  legacyId Int
+  courseId String?
+  course HistoricalCourse? @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  title String
+  maxPoints Int?
+  ratings HistoricalRating[]
+  @@unique([importId, legacyId])
+  @@index([courseId])
+  @@map("historical_tasks")
+}
+model HistoricalRating {
+  id String @id @default(cuid())
+  taskId String
+  task HistoricalTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  studentLegacyId Int
+  evaluatorLegacyId Int
+  studentName String
+  evaluatorName String
+  points Int
+  feedback String
+  sourceDate String
+  @@unique([taskId, studentLegacyId, evaluatorLegacyId])
+  @@index([taskId])
+  @@map("historical_ratings")
+}
+
+model PasswordResetToken {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionVersion Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model BulkSubmissionImport {
+  id String @id @default(cuid())
+  taskId String
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fingerprint String
+  result Json
+  createdAt DateTime @default(now())
+  @@unique([taskId, fingerprint])
+  @@map("bulk_submission_imports")
+}
+
+model PointAdjustment {
+ id String @id @default(cuid())
+ subjectId String
+ subject Subject @relation(fields:[subjectId], references:[id], onDelete:Cascade)
+ studentId String
+ student User @relation("AdjustmentStudent", fields:[studentId], references:[id], onDelete:Cascade)
+ authorId String
+ author User @relation("AdjustmentAuthor", fields:[authorId], references:[id], onDelete:Restrict)
+ amountCents Int
+ reason String @db.Text
+ visibleToStudent Boolean @default(false)
+ requestId String @unique
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ revokedAt DateTime?
+ revokedById String?
+ revokedBy User? @relation("AdjustmentRevoker", fields:[revokedById], references:[id], onDelete:SetNull)
+ @@index([subjectId,studentId])
+ @@map("point_adjustments")
+}
+
+model ConsultationComment {
+  id String @id @default(cuid())
+  submissionId String
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content String @db.Text
+  createdAt DateTime @default(now())
+  @@index([submissionId, createdAt])
+  @@map("consultation_comments")
+}

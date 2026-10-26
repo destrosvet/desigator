@@ -1,0 +1,74 @@
+# Git
+.git
+.gitignore
+
+# Node modules (nainstalují se v buildu)
+node_modules
+
+# Vývojové logy
+*.log
+dev.log
+server.log
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testovací soubory
+coverage
+.nyc_output
+
+# Env soubory – nikdy do image
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# SQLite (původní databáze)
+db/*.db
+db/*.db-journal
+
+# Bun lock (používáme npm)
+bun.lock
+
+# Prisma migrace jsou součástí image pro migrate deploy.
+
+# Next.js build cache
+.next/
+
+# Download a examples (nejsou součástí produkce)
+download/
+examples/
+mini-services/
+skills/
+playwright-report/
+test-results/
+lint-results.json
+db/
+.cline/
+
+# Reference implementation, not part of the new application
+.old/
+
+# Local runtimes, fixtures, credentials and deployment overrides
+local-*
+.env*
+!.env.example
+.codex/
+.agents/
+docker-compose*.yml
+compose*.yml
+*.dump
+backups/

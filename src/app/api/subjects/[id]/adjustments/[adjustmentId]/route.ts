@@ -1,0 +1,7 @@
+import {getServerSession} from "next-auth";import {NextResponse} from "next/server";import {z} from "zod";import {authOptions} from "@/lib/auth";import {db} from "@/lib/db";import {canManageSubject} from "@/lib/authorization";
+export async function PATCH(req:Request,{params}:{params:Promise<{id:string;adjustmentId:string}>}){
+ const session=await getServerSession(authOptions);if(!session)return NextResponse.json({error:"unauthorized"},{status:401});const {id,adjustmentId}=await params;if(!await canManageSubject(session.user,id))return NextResponse.json({error:"forbidden"},{status:403});
+ const input=z.discriminatedUnion("action",[z.object({action:z.literal("revoke")}).strict(),z.object({action:z.literal("visibility"),visibleToStudent:z.boolean()}).strict()]).safeParse(await req.json().catch(()=>null));if(!input.success)return NextResponse.json({error:"invalidInput"},{status:400});
+ const result=await db.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM subjects WHERE id = ${id} FOR UPDATE`;const adjustment=await tx.pointAdjustment.findFirst({where:{id:adjustmentId,subjectId:id}});if(!adjustment)return false;if(adjustment.revokedAt)return input.data.action==="revoke";await tx.pointAdjustment.update({where:{id:adjustmentId},data:input.data.action==="revoke"?{revokedAt:new Date(),revokedById:session.user.id}:{visibleToStudent:input.data.visibleToStudent}});return true;});
+ return NextResponse.json(result?{ok:true}:{error:"notFound"},{status:result?200:404,headers:{"Cache-Control":"no-store"}});
+}

@@ -1,0 +1,19 @@
+import {beforeEach,describe,it,expect,vi} from "vitest";
+const m=vi.hoisted(()=>({session:vi.fn(),manage:vi.fn(),transaction:vi.fn(),lock:vi.fn(),subject:vi.fn(),member:vi.fn(),previous:vi.fn(),create:vi.fn(),find:vi.fn(),update:vi.fn()}));
+vi.mock("next-auth",()=>({getServerSession:m.session}));vi.mock("@/lib/auth",()=>({authOptions:{}}));vi.mock("@/lib/authorization",()=>({canManageSubject:m.manage}));vi.mock("@/lib/db",()=>({db:{$transaction:m.transaction}}));
+import {POST} from "@/app/api/subjects/[id]/adjustments/route";
+import {PATCH} from "@/app/api/subjects/[id]/adjustments/[adjustmentId]/route";
+const body={studentId:"student",points:"0,20",reason:"Effort",visibleToStudent:false,requestId:"550e8400-e29b-41d4-a716-446655440000"};
+const post=(input:unknown=body)=>POST(new Request("http://localhost/api/subjects/subject/adjustments",{method:"POST",body:JSON.stringify(input)}),{params:Promise.resolve({id:"subject"})});
+const patch=(input:unknown)=>PATCH(new Request("http://localhost/api/subjects/subject/adjustments/entry",{method:"PATCH",body:JSON.stringify(input)}),{params:Promise.resolve({id:"subject",adjustmentId:"entry"})});
+describe("point adjustment authorization and audit",()=>{
+ beforeEach(()=>{vi.resetAllMocks();m.session.mockResolvedValue({user:{id:"teacher"}});m.manage.mockResolvedValue(true);m.subject.mockResolvedValue({classId:"class",class:{organizationId:"school"}});m.member.mockResolvedValue({id:"member"});m.previous.mockResolvedValue(null);m.create.mockResolvedValue({id:"entry"});m.find.mockResolvedValue({id:"entry",revokedAt:null});m.transaction.mockImplementation(async run=>run({$queryRaw:m.lock,subject:{findFirst:m.subject},classStudent:{findFirst:m.member},pointAdjustment:{findUnique:m.previous,create:m.create,findFirst:m.find,update:m.update}}));});
+ it("requires login",async()=>{m.session.mockResolvedValue(null);expect((await post()).status).toBe(401);expect((await patch({action:"revoke"})).status).toBe(401);});
+ it.each(["STUDENT","EVALUATOR","FOREIGN_TEACHER"])("rejects %s without subject ownership",async()=>{m.manage.mockResolvedValue(false);expect((await post()).status).toBe(403);expect((await patch({action:"visibility",visibleToStudent:true})).status).toBe(403);expect(m.transaction).not.toHaveBeenCalled();});
+ it.each(["0.001","0","1e2"])("rejects invalid decimal %s",async points=>{expect((await post({...body,points})).status).toBe(400);expect(m.create).not.toHaveBeenCalled();});
+ it("rejects students outside the current class and school",async()=>{m.member.mockResolvedValue(null);expect((await post()).status).toBe(409);expect(m.create).not.toHaveBeenCalled();});
+ it("records exact cents, actor, reason and hidden visibility by explicit choice",async()=>{expect((await post()).status).toBe(201);expect(m.lock).toHaveBeenCalledOnce();expect(m.create.mock.calls[0][0].data).toEqual({subjectId:"subject",studentId:"student",amountCents:20,reason:"Effort",visibleToStudent:false,authorId:"teacher",requestId:body.requestId});});
+ it("does not duplicate retried requests",async()=>{m.previous.mockResolvedValue({...body,id:"entry",subjectId:"subject",amountCents:20});expect((await post()).status).toBe(201);expect(m.create).not.toHaveBeenCalled();expect((await post({...body,points:"0.21"})).status).toBe(409);});
+ it("changes visibility without changing points or actor",async()=>{expect((await patch({action:"visibility",visibleToStudent:true})).status).toBe(200);expect(m.update).toHaveBeenCalledWith({where:{id:"entry"},data:{visibleToStudent:true}});});
+ it("revokes without deleting and keeps the original entry",async()=>{expect((await patch({action:"revoke"})).status).toBe(200);expect(m.update).toHaveBeenCalledWith({where:{id:"entry"},data:{revokedAt:expect.any(Date),revokedById:"teacher"}});m.find.mockResolvedValue({id:"entry",revokedAt:new Date()});expect((await patch({action:"visibility",visibleToStudent:true})).status).toBe(404);});
+});

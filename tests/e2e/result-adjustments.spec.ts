@@ -1,0 +1,38 @@
+import {test,expect,type Page} from "@playwright/test";
+import {PrismaClient} from "@prisma/client";
+import bcrypt from "bcryptjs";
+import {randomUUID} from "node:crypto";
+test.skip(process.env.E2E_PUBLIC_RESULTS!=="true","Requires isolated results database");test.use({actionTimeout:10000});
+async function login(page:Page,email:string){await page.goto("/cs/auth/login");await page.getByLabel("E-mail",{exact:true}).fill(email);await page.getByLabel("Heslo",{exact:true}).fill("Adjustment-test-123");await page.getByRole("button",{name:/Přihlásit/}).click();await expect(page).toHaveURL(/dashboard/);}
+test("teacher decimal overview, private and visible corrections, student isolation and revocation",async({browser,baseURL},testInfo)=>{
+ test.setTimeout(90000);const url=process.env.E2E_PUBLIC_RESULTS_DATABASE_URL||"",name=new URL(url).pathname;if(name!=="/desigator_public_results_test"&&!(process.env.CI&&name==="/desigator_ci"))throw Error("Isolated database required");const db=new PrismaClient({datasourceUrl:url});
+ const school=await db.organization.create({data:{name:"Adjustment test "+randomUUID()}}),password=await bcrypt.hash("Adjustment-test-123",10);
+ const teacher=await db.user.create({data:{name:"Adjustment teacher",email:randomUUID()+"@example.test",password,role:"TEACHER",roles:["TEACHER"],organizationId:school.id}});
+ const students=await Promise.all(["S001","S002"].map((id,i)=>db.user.create({data:{name:i?"Other private student":"Adjusted student",email:randomUUID()+"@example.test",password,role:"STUDENT",roles:["STUDENT"],externalId:id,organizationId:school.id}})));
+ const reviewers=[teacher];for(let i=0;i<4;i++)reviewers.push(await db.user.create({data:{name:"Adjustment evaluator "+i,email:randomUUID()+"@example.test",password,role:"EVALUATOR",roles:["EVALUATOR"],organizationId:school.id}}));
+ const classroom=await db.class.create({data:{name:"Adjustment test class",code:randomUUID(),teacherId:teacher.id,organizationId:school.id,students:{create:students.map(student=>({studentId:student.id}))}}});
+ const subject=await db.subject.create({data:{name:"Decimal assessment",year:2026,classId:classroom.id,teacherId:teacher.id}});
+ const task=await db.task.create({data:{title:"Final portfolio",maxPoints:100,status:"PUBLISHED",subjectId:subject.id,creatorId:teacher.id}});
+ await db.submission.create({data:{taskId:task.id,studentId:students[0].id,stage:"FINAL",resultsPublishedAt:new Date(),resultsPublishedById:teacher.id,evaluations:{create:reviewers.map((reviewer,i)=>({evaluatorId:reviewer.id,status:"COMPLETED",totalPoints:i?90:89}))}}});
+ const tc=await browser.newContext({baseURL}),sc=await browser.newContext({baseURL}),ac=await browser.newContext({baseURL}),oc=await browser.newContext({baseURL});
+ try{
+ const teacherPage=await tc.newPage(),studentPage=await sc.newPage(),otherPage=await oc.newPage(),anon=await ac.newPage();await login(teacherPage,teacher.email);await login(studentPage,students[0].email);await login(otherPage,students[1].email);
+ const route="/cs/subjects/"+subject.id+"/results",api="/api/subjects/"+subject.id+"/results",adjustments="/api/subjects/"+subject.id+"/adjustments";
+ expect((await anon.request.get(api)).status()).toBe(401);expect((await studentPage.request.post(adjustments,{data:{}})).status()).toBe(403);
+ const share=await(await teacherPage.request.patch("/api/classes/"+classroom.id+"/public-results",{data:{enabled:true}})).json();const publicApi="/api/public/results/"+share.token;
+ await teacherPage.goto(route);let row=teacherPage.getByRole("row").filter({has:teacherPage.getByRole("rowheader",{name:/Adjusted student/})});await expect(row.getByText("K A chybí 0,20 b.",{exact:true})).toBeVisible();await expect(row.getByRole("cell",{name:"B",exact:true})).toBeVisible();
+ await row.getByRole("button",{name:"Přidat body",exact:true}).click();const dialog=teacherPage.getByRole("dialog");await dialog.getByLabel(/^Body/).fill("0,20");await dialog.getByLabel("Důvod korekce",{exact:true}).fill("HIDDEN_EFFORT_REASON");await expect(dialog.getByRole("checkbox")).not.toBeChecked();await expect(dialog.getByText(/89,80 → 90,00 · A/)).toBeVisible();
+ const posted=teacherPage.waitForRequest(req=>req.method()==="POST"&&req.url().endsWith(adjustments));await dialog.getByRole("button",{name:"Uložit a použít korekci",exact:true}).click();const request=(await posted).postDataJSON();await expect(teacherPage.getByRole("dialog")).toHaveCount(0);await expect(row.getByRole("cell",{name:"A",exact:true})).toBeVisible();
+ expect((await teacherPage.request.post(adjustments,{data:request})).status()).toBe(201);expect(await db.pointAdjustment.count({where:{subjectId:subject.id}})).toBe(1);
+ let own=await(await studentPage.request.get(api)).json();expect(own.rows).toHaveLength(1);expect(own.rows[0]).toMatchObject({total:90,grade:"A",visibleAdjustments:[]});expect(JSON.stringify(own)).not.toMatch(/HIDDEN_EFFORT_REASON|author|adjustmentPoints|publishedTotal|Other private student/);
+ await studentPage.goto(route);await expect(studentPage.getByRole("cell",{name:"A",exact:true})).toBeVisible();await expect(studentPage.getByRole("button",{name:"Přidat body",exact:true})).toHaveCount(0);
+ let publicData=await(await anon.request.get(publicApi)).json();expect(publicData.rows.find((r:{studentId:string})=>r.studentId==="S001").total).toBe(90);expect(JSON.stringify(publicData)).not.toContain("HIDDEN_EFFORT_REASON");
+ await row.getByRole("button",{name:"Historie korekcí",exact:true}).click();await teacherPage.getByRole("dialog").getByRole("button",{name:"Zobrazit studentovi",exact:true}).click();await expect(teacherPage.getByRole("dialog")).toHaveCount(0);await studentPage.reload();await expect(studentPage.getByText("HIDDEN_EFFORT_REASON",{exact:true})).toBeVisible();
+ publicData=await(await anon.request.get(publicApi)).json();expect(JSON.stringify(publicData)).not.toContain("HIDDEN_EFFORT_REASON");const peer=await(await otherPage.request.get(api)).json();expect(peer.rows).toHaveLength(1);expect(peer.rows[0].studentId).toBe(students[1].id);expect(JSON.stringify(peer)).not.toContain("HIDDEN_EFFORT_REASON");
+ await row.getByRole("button",{name:"Historie korekcí",exact:true}).click();await teacherPage.getByRole("dialog").getByRole("button",{name:"Skrýt studentovi",exact:true}).click();await expect(teacherPage.getByRole("dialog")).toHaveCount(0);own=await(await studentPage.request.get(api)).json();expect(own.rows[0].visibleAdjustments).toEqual([]);
+ await teacherPage.screenshot({path:testInfo.outputPath("teacher-results.png"),fullPage:true,animations:"disabled"});
+ await row.getByRole("button",{name:"Historie korekcí",exact:true}).click();teacherPage.once("dialog",d=>d.accept());await teacherPage.getByRole("dialog").getByRole("button",{name:"Stornovat korekci",exact:true}).click();await expect(teacherPage.getByRole("dialog")).toHaveCount(0);await expect(row.getByRole("cell",{name:"B",exact:true})).toBeVisible();
+ own=await(await studentPage.request.get(api)).json();expect(own.rows[0].total).toBe(89.8);const entry=await db.pointAdjustment.findFirstOrThrow({where:{subjectId:subject.id}});expect(entry.amountCents).toBe(20);expect(entry.revokedAt).not.toBeNull();expect(entry.authorId).toBe(teacher.id);expect(entry.revokedById).toBe(teacher.id);
+ await teacherPage.setViewportSize({width:390,height:844});await teacherPage.screenshot({path:testInfo.outputPath("teacher-results-mobile.png"),fullPage:true,animations:"disabled"});
+ }finally{await Promise.allSettled([tc.close(),sc.close(),ac.close(),oc.close()]);await db.class.delete({where:{id:classroom.id}});await db.user.deleteMany({where:{organizationId:school.id}});await db.organization.delete({where:{id:school.id}});await db.$disconnect();}
+});
