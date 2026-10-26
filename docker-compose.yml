@@ -9,7 +9,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: postgresql://desigator:${POSTGRES_PASSWORD:?required}@postgres:5432/desigator
+      DATABASE_URL: postgresql://desigator:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/desigator
       AUTH_SECRET: ${AUTH_SECRET:?required}
       NEXTAUTH_SECRET: ${AUTH_SECRET:?required}
       AUTH_URL: ${APP_URL:?required}
@@ -25,37 +25,18 @@ services:
       RESEND_FROM: ${RESEND_FROM:?required}
     depends_on:
       postgres: { condition: service_healthy }
-
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: desigator
       POSTGRES_USER: desigator
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
     volumes: [desigator_postgres:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U desigator -d desigator"]
       interval: 5s
       timeout: 5s
       retries: 20
-
-  bootstrap-vut:
-    profiles: ["vut-bootstrap"]
-    build:
-      context: .
-      dockerfile: Dockerfile.instance-bootstrap
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://desigator:${POSTGRES_PASSWORD:?required}@postgres:5432/desigator
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?required}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?required}
-      ADMIN_NAME: ${ADMIN_NAME:-Administrátor}
-      DEFAULT_TEACHER_EMAIL: ${DEFAULT_TEACHER_EMAIL:?required}
-      DEFAULT_TEACHER_PASSWORD: ${DEFAULT_TEACHER_PASSWORD:?required}
-      DEFAULT_TEACHER_NAME: ${DEFAULT_TEACHER_NAME:-Správce oboru průmyslový design}
-    depends_on:
-      postgres: { condition: service_healthy }
-
 volumes:
   desigator_postgres:

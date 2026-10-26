@@ -1,24 +1,29 @@
-# Nasazení do Coolify
+# Deployment to Coolify
 
-Připojte repozitář přes GitHub App, zvolte Docker Compose a nastavte `coolify.yml`. Doménu připojte ke službě `app` na portu 3000 a vložte proměnné podle `.env.coolify.example`.
+Connect the repository through the GitHub App and deploy the default `docker-compose.yml`. Attach the public domain to the `app` service on internal port 3000.
 
-Běžné nasazení je univerzální: provede pouze databázové migrace a ponechá aplikaci bez školy, uživatelů a ukázkových dat. PostgreSQL používá persistentní volume `desigator_postgres`, takže redeploy data nemaže.
+The stack does not publish host ports. Coolify handles routing through its proxy. PostgreSQL uses the persistent `desigator_postgres` volume and Coolify generates a stable database password through `SERVICE_PASSWORD_64_POSTGRES`.
 
-MinIO není součástí Compose. Aplikace používá existující serverové MinIO přes `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID` a `S3_SECRET_ACCESS_KEY`. Bucket musí být neveřejný, dostupný z aplikačního kontejneru a přístupový klíč musí mít právo číst i zapisovat objekty. Zálohujte databázi i tento bucket.
+Set the application values shown in `.env.coolify.example` under **Configuration → Environment Variables**. The PostgreSQL password is generated automatically and must not be replaced with a hard-coded value.
 
-## Jednorázová inicializace této VUT instance
+MinIO is not part of the stack. Configure the existing server storage through `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`. The bucket must remain private and the application key needs read and write access.
 
-Služba `bootstrap-vut` má Compose profil a při běžném deployi se nespouští. Historický SQL export zůstává mimo Git. Nahrajte jej ručně na server, například do `/srv/desigator-import/desigator-export.sql`, s přístupem pouze pro správce.
+Normal deployment only runs database migrations. It creates no school, accounts, or demo data.
 
-Po prvním startu databáze spusťte na serveru jednorázově:
+## Optional one-time VUT bootstrap
+
+The VUT-specific bootstrap is isolated in `compose.bootstrap-vut.yml`; Coolify never parses it during a normal build. Keep the historical SQL export outside Git and upload it to the server, for example as `/srv/desigator-import/desigator-export.sql`.
+
+After the main stack is healthy, run once on the server:
 
 ```sh
-docker compose -f coolify.yml --profile vut-bootstrap run --rm \
+docker compose -f docker-compose.yml -f compose.bootstrap-vut.yml \
+  --profile vut-bootstrap run --rm \
   -e LEGACY_IMPORT_FILE=/bootstrap/desigator-export.sql \
   -v /srv/desigator-import/desigator-export.sql:/bootstrap/desigator-export.sql:ro \
   bootstrap-vut
 ```
 
-Skript idempotentně vytvoří organizaci FSI VUT / Odbor průmyslového designu, administrátora a školního správce/učitele, importuje historický archiv a přiřadí historické předměty učiteli. Po úspěšném importu serverovou kopii bezpečně archivujte nebo odstraňte podle pravidel pro osobní údaje.
+This creates the selected organization, administrator, and school teacher, imports the historical archive idempotently, and assigns unowned historical courses to that teacher.
 
-Nakonec ověřte `/api/health`, přihlášení, historické statistiky a testovací upload do existujícího MinIO bucketu.
+Finally verify `/api/health`, authentication, historical statistics, and an upload to the existing MinIO bucket. Configure backups for both PostgreSQL and the object-storage bucket.

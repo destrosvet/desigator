@@ -1,0 +1,17 @@
+services:
+  bootstrap-vut:
+    profiles: ["vut-bootstrap"]
+    build:
+      context: .
+      dockerfile: Dockerfile.instance-bootstrap
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://desigator:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/desigator
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?required}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrátor}
+      DEFAULT_TEACHER_EMAIL: ${DEFAULT_TEACHER_EMAIL:?required}
+      DEFAULT_TEACHER_PASSWORD: ${DEFAULT_TEACHER_PASSWORD:?required}
+      DEFAULT_TEACHER_NAME: ${DEFAULT_TEACHER_NAME:-Správce oboru průmyslový design}
+    depends_on:
+      postgres: { condition: service_healthy }
