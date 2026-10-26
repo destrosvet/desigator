@@ -34,8 +34,7 @@ export function visibleTaskScope(user: AuthUser): Prisma.TaskWhereInput {
     ...(canEvaluate(user) ? [{ submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } }] : [])] };
 }
 export async function canManageClass(user: AuthUser, id: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
-  if (!canTeach(user)) return false;
+  if (!isAdmin(user) && !canTeach(user)) return false;
   return Boolean(await db.class.findFirst({ where: { id, ...managedClassScope(user) }, select: { id: true } }));
 }
 export async function canViewSubject(user: AuthUser, id: string): Promise<boolean> {

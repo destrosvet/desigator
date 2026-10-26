@@ -55,6 +55,11 @@ const authMiddleware = withAuth(
 );
 
 export default function middleware(req: NextRequest) {
+  // This application exposes no Server Actions; reject forged action requests before Next.js logs them.
+  if (req.headers.has("next-action")) {
+    return new NextResponse("Invalid Server Action request.", { status: 400 });
+  }
+
   const publicPaths = ["/api/", "/auth/", "/_next/", "/favicon.ico", "/logo.svg"];
   const isPublic = publicPaths.some((path) => req.nextUrl.pathname.startsWith(path));
 

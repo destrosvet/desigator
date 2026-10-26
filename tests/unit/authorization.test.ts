@@ -21,9 +21,14 @@ import {
 describe("object authorization", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("allows administrators without querying ownership", async () => {
+  it("allows administrators only when the target class exists", async () => {
+    dbMock.class.findFirst.mockResolvedValueOnce({ id: "class-1" }).mockResolvedValueOnce(null);
     await expect(canManageClass({ id: "admin", role: "ADMIN" }, "class-1")).resolves.toBe(true);
-    expect(dbMock.class.findFirst).not.toHaveBeenCalled();
+    await expect(canManageClass({ id: "admin", role: "ADMIN" }, "missing")).resolves.toBe(false);
+    expect(dbMock.class.findFirst).toHaveBeenCalledWith({
+      where: { id: "class-1" },
+      select: { id: true },
+    });
   });
 
   it("allows a teacher only when the owned class exists", async () => {

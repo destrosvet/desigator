@@ -13,7 +13,7 @@ const subjectSchema = z.object({
   description: z.string().optional(),
   semester: z.enum(["FULL_YEAR", "SUMMER", "WINTER"]).default("FULL_YEAR"),
   year: z.number().min(2000).max(2100).default(new Date().getFullYear()),
-  classId: z.string(),
+  classId: z.string().min(1),
 });
 
 export async function GET(req: Request) {
