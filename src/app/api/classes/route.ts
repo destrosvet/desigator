@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isAdmin } from "@/lib/permissions";
 import { z } from "zod";
 
 const classSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
+  organizationId: z.string().min(1).optional(),
 });
 
 export async function GET(req: Request) {
@@ -65,18 +67,22 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { name, description } = classSchema.parse(body);
+    const { name, description, organizationId: requestedOrganizationId } = classSchema.parse(body);
 
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    if (!session.user.organizationId) return NextResponse.json({ error: "Nejdříve založte školu v Nastavení nebo přijměte pozvánku." }, { status: 409 });
+    const organizationId = isAdmin(session.user) ? requestedOrganizationId || session.user.organizationId : session.user.organizationId;
+    if (!organizationId) return NextResponse.json({ error: isAdmin(session.user) ? "Vyberte školu, do které třída patří." : "Nejdříve založte školu v Nastavení nebo přijměte pozvánku." }, { status: 409 });
+    if (isAdmin(session.user) && !await db.organization.findUnique({ where: { id: organizationId }, select: { id: true } })) {
+      return NextResponse.json({ error: "Vybraná škola neexistuje." }, { status: 400 });
+    }
     const cls = await db.class.create({
       data: {
         name,
         description,
         code,
         teacherId: session.user.id,
-        organizationId: session.user.organizationId,
+        organizationId,
       },
     });
 

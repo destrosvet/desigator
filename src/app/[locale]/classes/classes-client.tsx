@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BookOpen, Loader2, Plus, Users } from "lucide-react";
 
 type ClassItem = {
@@ -21,10 +22,13 @@ type ClassItem = {
   _count: { students: number; subjects: number };
 };
 
-export function ClassesClient({ classes, role, locale }: { classes: ClassItem[]; role: string; locale: string }) {
+type OrganizationOption = { id: string; name: string };
+
+export function ClassesClient({ classes, role, locale, organizations, defaultOrganizationId }: { classes: ClassItem[]; role: string; locale: string; organizations: OrganizationOption[]; defaultOrganizationId: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [organizationId, setOrganizationId] = useState(defaultOrganizationId);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -35,7 +39,7 @@ export function ClassesClient({ classes, role, locale }: { classes: ClassItem[];
     const response = await fetch("/api/classes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, description, ...(role === "ADMIN" ? { organizationId } : {}) }),
     });
     const result = await response.json();
     setBusy(false);
@@ -75,8 +79,10 @@ export function ClassesClient({ classes, role, locale }: { classes: ClassItem[];
               {canCreate ? (
                 <div className="space-y-4">
                   <div className="space-y-2"><Label htmlFor="class-name">Název</Label><Input id="class-name" value={name} onChange={(event) => setName(event.target.value)} /></div>
+
+                  {role === "ADMIN" ? <div className="space-y-2"><Label htmlFor="class-organization">Škola</Label><Select value={organizationId} onValueChange={setOrganizationId}><SelectTrigger id="class-organization"><SelectValue placeholder="Vyberte školu" /></SelectTrigger><SelectContent>{organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select>{!organizations.length ? <p className="text-sm text-muted-foreground">Nejdříve založte školu v Nastavení → Organizace.</p> : null}</div> : null}
                   <div className="space-y-2"><Label htmlFor="class-description">Popis</Label><Textarea id="class-description" value={description} onChange={(event) => setDescription(event.target.value)} /></div>
-                  <Button onClick={createClass} disabled={busy || !name.trim()}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Vytvořit</Button>
+                  <Button onClick={createClass} disabled={busy || !name.trim() || (role === "ADMIN" && !organizationId)}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Vytvořit</Button>
                 </div>
               ) : (
                 <div className="space-y-4">
