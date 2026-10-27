@@ -1,6 +1,7 @@
 import type { WorkAttachment } from "@/lib/media";
 
 export type ReviewWork = {
+  canEdit?: boolean;
   id: string; status: string; totalPoints: number | null; feedback: string | null;
   evaluator: { name: string };
   scores: Array<{ criterionId: string; points: number; comment: string | null }>;
@@ -27,7 +28,7 @@ export type ReviewDraft = {
 export function draftFromWork(work: ReviewWork): ReviewDraft {
   const scores = new Map(work.scores.map((score) => [score.criterionId, score]));
   return {
-    readOnly: Boolean(work.submission.resultsPublishedAt),
+    readOnly: Boolean(work.submission.resultsPublishedAt) || work.canEdit === false,
     id: work.id, feedback: work.feedback || "", status: work.status, revision: 0, savedRevision: 0,
     touched: work.scores.map((score) => score.criterionId), maxPoints: work.submission.task.maxPoints,
     limits: Object.fromEntries(work.submission.task.criteria.map((criterion) => [criterion.id, criterion.maxPoints])),

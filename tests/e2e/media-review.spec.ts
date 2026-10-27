@@ -77,7 +77,7 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     expect(await download.body()).toEqual(image);
 
     await reviewer.goto(`/cs/evaluations?taskId=${task.id}&search=${encodeURIComponent(title)}`);
-    const card = reviewer.locator(`a[href$="/evaluations/${evaluation.id}"]`);
+    const card = reviewer.locator(`a[href*="/evaluations/${evaluation.id}"]`);
     await expect(card).toBeVisible();
     await expect.poll(() => card.getByRole("img").evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(card).toHaveAccessibleName(`Hodnotit Anonymní práce 1: ${title}`);
@@ -162,7 +162,8 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(0);
     await reviewer.getByRole("link").filter({ has: reviewer.getByRole("heading", { name: title, exact: true }) }).click();
     await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(2);
-    await reviewer.locator(`a[href$="/evaluations/${evaluation.id}"]`).click();
+    // Direct-link keyboard navigation uses the default task order.
+    await reviewer.goto(`/cs/evaluations/${evaluation.id}`);
     await reviewer.getByRole("button", { name: "Další student", exact: true }).click();
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     const slider = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });

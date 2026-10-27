@@ -29,9 +29,9 @@ export const evaluationQuerySchema = z.object({
   evaluatorId: z.string().min(1).optional(),
 });
 
-export async function listEvaluations(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>) {
-  const { page, limit, search, status, taskId, subjectId, studentId, evaluatorId } = query;
-  const where: Prisma.EvaluationWhereInput = { AND: [
+export function evaluationWhere(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>): Prisma.EvaluationWhereInput {
+  const { search, status, taskId, subjectId, studentId, evaluatorId } = query;
+  return { AND: [
     evaluationScope(user),
     ...(status ? [{ status }] : []),
     ...(taskId ? [{ submission: { taskId } }] : []),
@@ -44,6 +44,11 @@ export async function listEvaluations(user: AuthUser, query: z.infer<typeof eval
       { feedback: { contains: search, mode: "insensitive" as const } },
     ] }] : []),
   ] };
+}
+
+export async function listEvaluations(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>) {
+  const { page, limit } = query;
+  const where = evaluationWhere(user, query);
   const [evaluations, total] = await Promise.all([
     db.evaluation.findMany({
       where,

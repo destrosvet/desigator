@@ -5,15 +5,18 @@ import { useRouter } from "next/navigation";
 import { attachmentUrl, PREVIEW_IMAGE_TYPES } from "@/lib/media";
 import { draftFromWork, draftScores, isFullyRated, type ReviewDraft, type ReviewQueueItem, type ReviewWork } from "@/lib/review-workspace";
 
+import { matchingReviewQueue } from "@/lib/review-filters";
+
 type SaveIntent = "draft" | "navigation" | "complete";
 
-export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueueItem[], locale: string, canEdit: boolean) {
+export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueueItem[], locale: string, canEdit: boolean, navigationQuery = "", statusFilter?: string) {
   const router = useRouter();
-  const [work, setWork] = useState(initial);
+  const [work, setWork] = useState<ReviewWork>(() => ({ ...initial, canEdit }));
   const [queue, setQueue] = useState(initialQueue);
-  const [form, setForm] = useState(() => draftFromWork(initial));
+  const queueRef = useRef(initialQueue);
+  const [form, setForm] = useState(() => draftFromWork(work));
   const formRef = useRef(form);
-  const cache = useRef(new Map<string, ReviewWork>([[initial.id, initial]]));
+  const cache = useRef(new Map<string, ReviewWork>([[initial.id, work]]));
   const requests = useRef(new Map<string, Promise<ReviewWork>>());
   const imageCache = useRef(new Map<string, HTMLImageElement>());
   const saveChain = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -29,7 +32,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
     const expectedId = formRef.current.id;
     const operation = saveChain.current.then(async () => {
       const snapshot = formRef.current;
-      if (!canEdit || snapshot.readOnly || snapshot.id !== expectedId) return true;
+      if (snapshot.readOnly || snapshot.id !== expectedId) return true;
       const complete = intent !== "draft" && isFullyRated(snapshot);
       if (intent === "complete" && !isFullyRated(snapshot)) { setError("Nejprve ohodnoťte všechna kritéria."); return false; }
       const status = complete || (snapshot.status === "COMPLETED" && isFullyRated(snapshot)) ? "COMPLETED" : "IN_PROGRESS";
@@ -45,7 +48,8 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
         if (formRef.current.id === snapshot.id) {
           const next = { ...formRef.current, savedRevision: snapshot.revision, status };
           formRef.current = next; setForm(next);
-          setQueue((items) => items.map((item) => item.id === snapshot.id ? { ...item, status, totalPoints: total } : item));
+          const nextQueue = queueRef.current.map((item) => item.id === snapshot.id ? { ...item, status, totalPoints: total } : item);
+          queueRef.current = nextQueue; setQueue(nextQueue);
           const cached = cache.current.get(snapshot.id);
           if (cached) cache.current.set(snapshot.id, { ...cached, status, totalPoints: total, feedback: snapshot.feedback, scores });
           setMessage("Hodnocení bylo uloženo.");
@@ -56,15 +60,15 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
     });
     saveChain.current = operation.catch(() => false);
     return operation;
-  }, [canEdit]);
+  }, []);
 
   const change = useCallback((transform: (draft: ReviewDraft) => ReviewDraft) => {
-    if (moving.current || !canEdit || formRef.current.readOnly) return;
+    if (moving.current || formRef.current.readOnly) return;
     const next = { ...transform(formRef.current), revision: formRef.current.revision + 1 };
     formRef.current = next; setForm(next); setMessage(""); setError("");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => { void persist("draft"); }, 650);
-  }, [canEdit, persist]);
+  }, [persist]);
 
   const load = useCallback(async (id: string): Promise<ReviewWork> => {
     const cached = cache.current.get(id);
@@ -75,8 +79,9 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       const response = await fetch(`/api/evaluations/${id}`);
       if (!response.ok) throw new Error("Další práci se nepodařilo načíst. Zkuste šipku znovu.");
       const result = await response.json();
-      cache.current.set(id, result.evaluation);
-      return result.evaluation as ReviewWork;
+      const evaluation = { ...result.evaluation, canEdit: result.canEdit === true } as ReviewWork;
+      cache.current.set(id, evaluation);
+      return evaluation;
     })();
     requests.current.set(id, pending);
     try { return await pending; } finally { requests.current.delete(id); }
@@ -90,10 +95,10 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       const next = await load(id);
       const draft = draftFromWork(next);
       formRef.current = draft; setWork(next); setForm(draft); setMessage("");
-      window.history.replaceState(null, "", `/${locale}/evaluations/${id}`);
+      window.history.replaceState(null, "", `/${locale}/evaluations/${id}${navigationQuery}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Práci se nepodařilo načíst."); }
     finally { moving.current = false; setNavigating(false); }
-  }, [load, locale, persist]);
+  }, [load, locale, navigationQuery, persist]);
 
   const leave = useCallback(async (href: string) => {
     if (moving.current) return;
@@ -103,8 +108,9 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
   }, [persist, router]);
 
   useEffect(() => {
-    const index = initialQueue.findIndex((item) => item.id === work.id);
-    for (const neighbor of [initialQueue[index - 1], initialQueue[index + 1]]) {
+    const activeQueue = matchingReviewQueue(queue, work.id, statusFilter);
+    const index = activeQueue.findIndex((item) => item.id === work.id);
+    for (const neighbor of [activeQueue[index - 1], activeQueue[index + 1]]) {
       if (!neighbor) continue;
       void load(neighbor.id).then((item) => {
         const file = item.submission.attachments.find((attachment) => PREVIEW_IMAGE_TYPES.has(attachment.mimeType) && attachment.size < 8 * 1024 * 1024);
@@ -115,7 +121,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
         }
       }).catch(() => undefined);
     }
-  }, [initialQueue, load, work.id]);
+  }, [queue, load, statusFilter, work.id]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -124,25 +130,26 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "s") {
         event.preventDefault(); event.stopPropagation(); void persist("draft"); return;
       }
-      const index = initialQueue.findIndex((item) => item.id === formRef.current.id);
+      const activeQueue = matchingReviewQueue(queueRef.current, formRef.current.id, statusFilter);
+      const index = activeQueue.findIndex((item) => item.id === formRef.current.id);
       if (command && !event.altKey && !event.shiftKey && event.key === "Enter") {
         event.preventDefault(); event.stopPropagation();
         if (!isFullyRated(formRef.current)) { void persist("complete"); return; }
-        const next = initialQueue[index + 1];
+        const next = activeQueue[index + 1];
         if (next) void goTo(next.id); else void persist("complete");
         return;
       }
       if (command || event.shiftKey || document.fullscreenElement) return;
       if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
         event.preventDefault(); event.stopPropagation();
-        const next = initialQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
+        const next = activeQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
         if (next) void goTo(next.id);
         return;
       }
       if (event.altKey) return;
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [role="slider"], [role="combobox"]')) return;
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      const next = initialQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
+      const next = activeQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
       if (next) { event.preventDefault(); void goTo(next.id); }
     };
     const beforeUnload = (event: BeforeUnloadEvent) => { if (formRef.current.revision !== formRef.current.savedRevision) { event.preventDefault(); event.returnValue = ""; } };
@@ -162,7 +169,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       window.removeEventListener("keydown", keydown, true); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", click, true);
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [goTo, initialQueue, leave, persist]);
+  }, [goTo, leave, persist, statusFilter]);
 
-  return { work, queue, form, saving, navigating, error, message, change, persist, goTo, leave, fullyRated: isFullyRated(form) };
+  return { work, queue: matchingReviewQueue(queue, work.id, statusFilter), form, saving, navigating, error, message, change, persist, goTo, leave, fullyRated: isFullyRated(form) };
 }

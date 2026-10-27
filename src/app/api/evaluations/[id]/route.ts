@@ -7,7 +7,7 @@ import { canManageEvaluation } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { evaluationScope } from "@/lib/evaluations";
 import { anonymousAttachmentName } from "@/lib/media";
-import { anonymousEvaluation } from "@/lib/permissions";
+import { anonymousEvaluation, isAdmin, canEvaluate } from "@/lib/permissions";
 
 const evaluationSchema = z.object({
   feedback: z.string().max(10000).nullable().optional(),
@@ -42,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
   if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
   const visibleEvaluation = anonymousEvaluation(session.user) ? { ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } } : evaluation;
-  return NextResponse.json({ evaluation: visibleEvaluation }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ evaluation: visibleEvaluation, canEdit: isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

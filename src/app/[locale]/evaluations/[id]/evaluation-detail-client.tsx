@@ -16,18 +16,18 @@ import type { ReviewQueueItem, ReviewWork } from "@/lib/review-workspace";
 
 const statusLabels: Record<string, string> = { PENDING: "Nehodnoceno", IN_PROGRESS: "Rozpracováno", COMPLETED: "Dokončeno" };
 
-export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdit }: { evaluation: ReviewWork; queue: ReviewQueueItem[]; canEdit: boolean }) {
+export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdit, gridHref: returnHref, navigationQuery = "", statusFilter }: { evaluation: ReviewWork; queue: ReviewQueueItem[]; canEdit: boolean; gridHref?: string; navigationQuery?: string; statusFilter?: string }) {
   const locale = useLocale();
   const publication = useTranslations("publication");
-  const review = useReviewWorkspace(evaluation, initialQueue, locale, canEdit);
+  const review = useReviewWorkspace(evaluation, initialQueue, locale, canEdit, navigationQuery, statusFilter);
   const { work, form, queue, saving, navigating, error, message, change, goTo, persist, leave, fullyRated } = review;
-  const editable = canEdit && !form.readOnly;
+  const editable = !form.readOnly;
   const { task, attachments, content } = work.submission;
   const index = queue.findIndex((item) => item.id === work.id);
   const previous = queue[index - 1];
   const next = queue[index + 1];
   const total = form.touched.reduce((sum, id) => sum + (form.scores[id]?.points || 0), 0);
-  const gridHref = `/${locale}/evaluations?taskId=${task.id}`;
+  const gridHref = returnHref || `/${locale}/evaluations?taskId=${task.id}`;
   const invalid = total > task.maxPoints || form.touched.some((id) => !Number.isInteger(form.scores[id].points));
 
   function setScore(id: string, value: string | number) {
@@ -61,7 +61,7 @@ export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdi
     </section>
 
     <section aria-label="Hodnocení práce" className="mx-auto w-full max-w-3xl rounded-xl border bg-card px-4 py-3 sm:px-6">
-      {form.readOnly ? <p role="status" className="mb-3 text-sm text-muted-foreground">{publication("locked")}</p> : null}
+      {form.readOnly ? <p role="status" className="mb-3 text-sm text-muted-foreground">{work.submission.resultsPublishedAt ? publication("locked") : "Toto hodnocení může upravit pouze přiřazený hodnotitel."}</p> : null}
       {!task.criteria.length ? <p role="alert" className="text-sm">Zadání nemá hodnoticí kritéria. Před hodnocením je musí doplnit učitel.</p> : null}
       <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
         {task.criteria.map((criterion) => <fieldset key={criterion.id} className="min-w-0 space-y-1" disabled={!editable || navigating}>
