@@ -15,6 +15,10 @@ describe("table ordering", () => {
     expect(readTableSort(new URLSearchParams("sort=password&order=desc"), ["name"])).toBeNull();
     expect(readTableSort(new URLSearchParams("sort=name&order=invalid"), ["name"])).toEqual({ key: "name", direction: "asc" });
   });
+  it("places Czech Š between S and T rather than after Z", () => {
+    const rows = ["Zeman", "Šimek", "Tichý", "Svoboda"];
+    expect(sortTableRows(rows, { key: "surname", direction: "asc" }, (item) => item)).toEqual(["Svoboda", "Šimek", "Tichý", "Zeman"]);
+  });
   it("derives a Czech list key from the final surname part", () => {
     expect(surnameSortKey("Jana Nováková")).toBe("Nováková Jana");
     expect(surnameSortKey("  Petr   Černý  ")).toBe("Černý Petr");
