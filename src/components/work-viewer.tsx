@@ -98,9 +98,9 @@ export function WorkViewer({ attachments, compact = false }: { attachments: Work
           <Button variant="ghost" size="icon" asChild><a href={attachmentUrl(selected.id)} aria-label={`Stáhnout ${selected.originalName}`}><Download className="size-4" /></a></Button>
         </div>
       </div>
-      <div ref={viewport} className={"relative overflow-auto overscroll-contain p-2 " + (compact ? "h-[clamp(180px,calc(100dvh-340px),800px)]" : "h-[70dvh] min-h-[320px] max-h-[900px]")} style={{ cursor: isImage ? panning ? "grabbing" : "grab" : undefined }} data-testid="work-preview"
+      <div ref={viewport} className={"relative overflow-auto overscroll-contain p-2 " + (compact ? "h-[clamp(180px,calc(100dvh-340px),800px)]" : "h-[70dvh] min-h-[320px] max-h-[900px]")} style={{ cursor: isImage ? panning ? "grabbing" : "grab" : undefined, touchAction: isImage ? "none" : undefined }} data-testid="work-preview"
         onPointerDown={(event) => {
-          if (!isImage || !imageCanvas.current || event.button !== 1) return;
+          if (!isImage || !imageCanvas.current || (event.button !== 0 && event.button !== 1)) return;
           event.preventDefault(); const node = event.currentTarget;
           drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: node.scrollLeft, top: node.scrollTop };
           node.setPointerCapture(event.pointerId); setPanning(true);
@@ -122,7 +122,7 @@ export function WorkViewer({ attachments, compact = false }: { attachments: Work
       {fullscreenError ? <p role="alert" className="px-4 pb-3 text-sm">{fullscreenError}</p> : null}
     </div>
     {isDocument ? <p className="text-xs text-muted-foreground">PDF můžete procházet a přibližovat ovládáním prohlížeče. Pokud se náhled nezobrazí, stáhněte originál tlačítkem v záhlaví.</p> : null}
-    {isImage ? <p className="text-[11px] text-muted-foreground">Kolečko myši: přiblížení · tažení prostředním tlačítkem: posun · obnovit: 100 %</p> : null}
+    {isImage ? <p className="text-[11px] text-muted-foreground">Kolečko myši: přiblížení v místě kurzoru · tažení levým nebo prostředním tlačítkem: posun · obnovit: 100 %</p> : null}
     <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Soubory práce">
       {attachments.map((file, index) => <button key={file.id} type="button" onClick={() => selectFile(file.id)} aria-label={`Zobrazit ${file.originalName}`} aria-pressed={file.id === selected.id} title={file.originalName} className={`${compact ? "flex w-20 items-center gap-1" : "w-32"} shrink-0 overflow-hidden rounded-lg border text-left focus-visible:outline-2 focus-visible:outline-primary ${file.id === selected.id ? "border-primary ring-1 ring-primary" : "border-border"}`}>
         {PREVIEW_IMAGE_TYPES.has(file.mimeType) ? <img src={attachmentUrl(file.id, "thumbnail")} alt="" loading="lazy" className={compact ? "h-9 w-12 bg-muted object-contain" : "h-20 w-full bg-muted object-contain"} /> : <div className={`flex items-center justify-center bg-muted ${compact ? "h-9 w-12" : "h-20"}`}><File className="size-5 text-muted-foreground" /></div>}
