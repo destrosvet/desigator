@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { uploadFileSizeLimit } from "@/lib/media";
 import { extractStudentId, suggestStudent } from "@/lib/import-matching";
 
@@ -32,6 +33,7 @@ function BulkUploadForm() {
   const [stage, setStage] = useState("FINAL");
   const [changeNote, setChangeNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [progress, setProgress] = useState<{ percent: number; sent: number; total: number; processing: boolean } | null>(null);
   const canUpload = ["ADMIN", "TEACHER"].includes(session?.user?.role || "");
   useEffect(() => {
     if (!canUpload) return;
@@ -65,16 +67,33 @@ function BulkUploadForm() {
   function update(index: number, patch: Partial<Row>) { setConfirmed(false); setRows((items) => items.map((row, i) => i === index ? { ...row, ...patch } : row)); }
   async function upload() {
     if (!confirmed || !selected.length || invalid || duplicates || overLimit) return;
-    setBusy(true); setMessage("");
+    setBusy(true); setMessage(""); setProgress({ percent: 0, sent: 0, total: selected.reduce((sum, row) => sum + row.file.size, 0), processing: false });
     try {
       const data = new FormData(); data.set("taskId", taskId); data.set("stage", stage); data.set("changeNote", changeNote); data.set("confirmed", "true"); data.set("studentIds", JSON.stringify(selected.map((row) => row.studentId))); selected.forEach((row) => data.append("files", row.file));
-      const response = await fetch("/api/submissions/bulk-upload", { method: "POST", body: data });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Import selhal.");
+      const result = await new Promise<{ replayed?: boolean; summary: { success: number } }>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("POST", "/api/submissions/bulk-upload");
+        request.upload.addEventListener("progress", (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.min(100, Math.round(event.loaded / event.total * 100));
+          setProgress({ percent, sent: event.loaded, total: event.total, processing: percent >= 100 });
+        });
+        request.upload.addEventListener("load", () => setProgress((current) => current ? { ...current, percent: 100, sent: current.total, processing: true } : current));
+        request.addEventListener("load", () => {
+          let response: { error?: string; replayed?: boolean; summary?: { success: number } } = {};
+          try { response = JSON.parse(request.responseText); } catch { /* The fallback message below covers invalid server responses. */ }
+          if (request.status >= 200 && request.status < 300 && response.summary) resolve({ replayed: response.replayed, summary: response.summary });
+          else reject(new Error(response.error || "Import selhal."));
+        });
+        request.addEventListener("error", () => reject(new Error("Nahrávání přerušilo síťové připojení.")));
+        request.addEventListener("abort", () => reject(new Error("Nahrávání bylo zrušeno.")));
+        request.send(data);
+      });
       setMessage((result.replayed ? "Tato dávka již byla importována. Další verze nevznikly. Evidováno " : "Uloženo ") + result.summary.success + " souborů pro " + new Set(selected.map((row) => row.studentId)).size + " žáků.");
       setRoster((current) => current ? { ...current, students: current.students.map((student) => selected.some((row) => row.studentId === student.id) ? { ...student, hasSubmission: true } : student) } : null);
       setRows([]); setConfirmed(false);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Import selhal."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setProgress(null); }
   }
   return <AppShell><div className="mx-auto max-w-5xl space-y-5"><h1 className="text-2xl font-bold">Hromadný import prací</h1><p className="text-sm text-muted-foreground">Vyberte práce ze síťového disku. U názvu 4464341_02.jpg je 4464341 školní ID, _02 rozlišuje pohled. Před potvrzením se nic nenahrává ani nezapisuje.</p>{!canUpload ? <p>Import je dostupný učiteli a administrátorovi.</p> : <>
     <fieldset disabled={busy} className="space-y-4 rounded-xl border p-4">
@@ -86,7 +105,12 @@ function BulkUploadForm() {
         const options = roster?.students.filter((item) => item.id === row.studentId || (item.name + " " + item.externalId).toLocaleLowerCase().includes(search.toLocaleLowerCase())) || [];
         return <div key={index} className="flex flex-wrap items-center gap-3 rounded-lg border p-3"><LocalPreview file={row.file} /><div className="min-w-40 flex-1"><p className="break-all font-medium">{row.file.name}</p><p className="text-xs text-muted-foreground">ID z názvu: {extractStudentId(row.file.name) || "nerozpoznáno"} · {Math.ceil(row.file.size / 1024)} KB</p>{!row.excluded && !row.studentId ? <p className="text-sm text-destructive">Vyberte žáka nebo soubor vyřaďte.</p> : null}{student?.hasSubmission ? <p className="text-sm text-destructive">Žák již má práci. Vznikne nová verze, předchozí soubory a hodnocení zůstanou zachované.</p> : null}{!/[.](jpe?g|png|webp|gif|pdf|zip|mp4|webm|glb)$/i.test(row.file.name) ? <p className="text-sm text-destructive">Opravte příponu souboru před importem.</p> : null}</div><div className="min-w-52 flex-1"><Label htmlFor={"author-" + index}>Autor souboru {index + 1}</Label><select id={"author-" + index} disabled={row.excluded} value={row.studentId} onChange={(event) => update(index, { studentId: event.target.value })} className="h-10 w-full rounded border bg-background px-2"><option value="">Vyberte žáka</option>{options.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.externalId || "bez ID"}{item.hasSubmission ? " · nová verze" : ""}</option>)}</select></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={row.excluded} onChange={(event) => update(index, { excluded: event.target.checked })} />Vyřadit</label></div>;
       })}</div><p>{selected.length} souborů · {new Set(selected.map((row) => row.studentId).filter(Boolean)).size} žáků · {rows.length - selected.length} vyřazeno</p>{duplicates ? <p role="alert">Dávka obsahuje duplicitní soubory. Vyřaďte je.</p> : null}{overLimit ? <p role="alert">Dávka překračuje limity uploadu.</p> : null}<label className="flex items-center gap-2"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={invalid || duplicates || overLimit || !selected.length} />Zkontroloval/a jsem autory všech vybraných souborů.</label><div className="flex flex-wrap gap-3"><Button onClick={() => void upload()} disabled={!confirmed || invalid || duplicates || overLimit || !selected.length}>{busy ? "Nahrávání…" : "Potvrdit párování a nahrát"}</Button><Button variant="outline" onClick={() => { setRows([]); setConfirmed(false); setMessage(""); }}>Zrušit výběr</Button></div></> : null}
-    </fieldset></>}{message ? <p role="status" className="rounded border p-3">{message}</p> : null}</div></AppShell>;
+    </fieldset>{progress ? <div className="space-y-2 rounded-xl border p-4" role="status" aria-live="polite"><div className="flex items-center justify-between gap-3 text-sm"><span>{progress.processing ? "Soubory jsou nahrané, ukládám práce…" : "Nahrávání souborů…"}</span><strong>{progress.percent} %</strong></div><Progress value={progress.percent} aria-label="Průběh hromadného nahrávání" /><p className="text-xs text-muted-foreground">{formatBytes(progress.sent)} z {formatBytes(progress.total)}</p></div> : null}</>}{message ? <p role="status" className="rounded border p-3">{message}</p> : null}</div></AppShell>;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return Math.ceil(bytes / 1024) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
 function LocalPreview({ file }: { file: File }) {
