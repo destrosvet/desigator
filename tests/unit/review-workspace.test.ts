@@ -7,8 +7,10 @@ const work: ReviewWork = {
 };
 
 describe("rapid review drafts", () => {
-  it("does not treat the initial zero position of a slider as an assessment", () => {
+  it("starts untouched sliders at half of their maximum without treating them as assessed", () => {
     const draft = draftFromWork(work);
+    expect(draft.scores.composition.points).toBe(30);
+    expect(draft.scores.craft.points).toBe(20);
     expect(isFullyRated(draft)).toBe(false);
     expect(draftScores(draft)).toEqual([]);
   });

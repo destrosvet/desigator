@@ -31,7 +31,7 @@ export function draftFromWork(work: ReviewWork): ReviewDraft {
     id: work.id, feedback: work.feedback || "", status: work.status, revision: 0, savedRevision: 0,
     touched: work.scores.map((score) => score.criterionId), maxPoints: work.submission.task.maxPoints,
     limits: Object.fromEntries(work.submission.task.criteria.map((criterion) => [criterion.id, criterion.maxPoints])),
-    scores: Object.fromEntries(work.submission.task.criteria.map((criterion) => [criterion.id, { points: scores.get(criterion.id)?.points ?? 0, comment: scores.get(criterion.id)?.comment || "" }])),
+    scores: Object.fromEntries(work.submission.task.criteria.map((criterion) => [criterion.id, { points: scores.get(criterion.id)?.points ?? Math.round(criterion.maxPoints / 2), comment: scores.get(criterion.id)?.comment || "" }])),
   };
 }
 
