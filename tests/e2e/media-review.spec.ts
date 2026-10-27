@@ -166,7 +166,7 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await reviewer.getByRole("button", { name: "Další student", exact: true }).click();
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     const slider = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });
-    await slider.focus(); await slider.press("ArrowRight");
+    await slider.focus(); await slider.press("Home"); await slider.press("ArrowRight");
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     await expect(reviewer.getByLabel("Kompozice", { exact: true })).toHaveValue("1");
     await reviewer.getByLabel("Technické provedení", { exact: true }).fill("0");
