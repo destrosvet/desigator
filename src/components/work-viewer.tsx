@@ -21,6 +21,7 @@ export function WorkViewer({ attachments, compact = false }: { attachments: Work
   const [failedId, setFailedId] = useState<string | null>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [fullscreenError, setFullscreenError] = useState("");
+  const [fullscreen, setFullscreen] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
   const isModel = selected && PREVIEW_MODEL_TYPES.has(selected.mimeType);
   const isDocument = selected && PREVIEW_DOCUMENT_TYPES.has(selected.mimeType);
@@ -70,6 +71,12 @@ export function WorkViewer({ attachments, compact = false }: { attachments: Work
     return () => node.removeEventListener("wheel", wheel);
   }, [changeZoom, isImage, selected?.id]);
 
+  useEffect(() => {
+    const update = () => setFullscreen(document.fullscreenElement === stage.current);
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, []);
+
   function selectFile(id: string) {
     setSelectedId(id);
     anchor.current = null; zoomRef.current = 1; setZoom(1); setPanning(false);
@@ -98,7 +105,7 @@ export function WorkViewer({ attachments, compact = false }: { attachments: Work
           <Button variant="ghost" size="icon" asChild><a href={attachmentUrl(selected.id)} aria-label={`Stáhnout ${selected.originalName}`}><Download className="size-4" /></a></Button>
         </div>
       </div>
-      <div ref={viewport} className={"relative overflow-auto overscroll-contain p-2 " + (compact ? "h-[clamp(180px,calc(100dvh-340px),800px)]" : "h-[70dvh] min-h-[320px] max-h-[900px]")} style={{ cursor: isImage ? panning ? "grabbing" : "grab" : undefined, touchAction: isImage ? "none" : undefined }} data-testid="work-preview"
+      <div ref={viewport} className={"relative overflow-auto overscroll-contain p-2 " + (fullscreen ? "h-auto min-h-0 max-h-none flex-1" : compact ? "h-[clamp(180px,calc(100dvh-340px),800px)]" : "h-[70dvh] min-h-[320px] max-h-[900px]")} style={{ cursor: isImage ? panning ? "grabbing" : "grab" : undefined, touchAction: isImage ? "none" : undefined }} data-testid="work-preview"
         onPointerDown={(event) => {
           if (!isImage || !imageCanvas.current || (event.button !== 0 && event.button !== 1)) return;
           event.preventDefault(); const node = event.currentTarget;
