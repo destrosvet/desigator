@@ -34,7 +34,7 @@ test('administrator explores all 10328 historical ratings and can assign a subje
 test('current statistics count only the latest final version and retain that result under newer WIP',async({request})=>{
  const url=process.env.E2E_STATISTICS_DATABASE_URL||'';if(!/^\/desigator_organizations_(preview_test|test)$/.test(new URL(url).pathname)&&!(process.env.CI&&new URL(url).pathname==='/desigator_ci'))throw new Error('Requires isolated statistics database');const db=new PrismaClient({datasourceUrl:url});
  const teacher=await db.user.findUniqueOrThrow({where:{email:'teacher@desigator.cz'}}),student=await db.user.findUniqueOrThrow({where:{email:'student1@desigator.cz'}});const cls=await db.class.findFirstOrThrow({where:{organizationId:'legacy'}});
- const subject=await db.subject.create({data:{name:'Statistics versions '+Date.now(),year:2026,classId:cls.id,teacherId:teacher.id}});
+ const subject=await db.subject.create({data:{name:'Statistics versions '+Date.now(),year:2026,classId:cls.id,classes:{create:{classId:cls.id}},teacherId:teacher.id}});
  try{
   const task=await db.task.create({data:{title:'Version statistics',subjectId:subject.id,creatorId:teacher.id,maxPoints:10,status:'PUBLISHED'}});
   await db.submission.create({data:{taskId:task.id,studentId:student.id,version:1,stage:'FINAL',status:'EVALUATED',evaluations:{create:{evaluatorId:teacher.id,status:'COMPLETED',totalPoints:2}}}});

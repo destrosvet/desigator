@@ -1,6 +1,8 @@
+import { restoreDemoSession } from "./demo-auth";
 import { expect, test, type Page } from "@playwright/test";
 test.skip(process.env.E2E_WORKFLOW !== "true", "Requires isolated seeded database");
 async function login(page: Page, email: string, password: string) {
+  if (await restoreDemoSession(page, email, password)) return;
  await page.goto("/cs/auth/login"); await page.getByLabel(/e-mail/i).fill(email); await page.getByLabel(/heslo/i).fill(password); await page.getByRole("button", { name: /přihlásit/i }).click(); await expect(page).toHaveURL(/dashboard/);
 }
 test("teacher defines ordered criteria in the UI and cannot change graded point limits", async ({ browser, baseURL }, testInfo) => {
@@ -14,7 +16,7 @@ test("teacher defines ordered criteria in the UI and cannot change graded point 
   await dialog.getByRole("button", { name: "Vytvořit", exact: true }).click(); await expect(dialog).toBeHidden(); await page.getByText(title, { exact: true }).click();
   await expect(page).toHaveURL(/tasks\/[^/]+$/); const taskId = page.url().split("/").pop()!;
   await page.getByRole("button", { name: "Publikovat", exact: true }).click(); await expect(page.getByText("Před publikováním přidejte alespoň jedno hodnoticí kritérium.", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Upravit zadání", exact: true }).click(); const editor = page.getByRole("form", { name: "Úprava zadání" });
+  const editor = page.getByRole("form", { name: "Úprava zadání" }); await expect(editor).toBeVisible();
   await editor.getByLabel("Datum termínu odevzdání", { exact: true }).fill("2026-12-01");
   await editor.getByLabel("Popis zadání", { exact: true }).fill("Vytvořte sérii ilustrací.");
   await editor.getByRole("button", { name: "Přidat kritérium", exact: true }).click(); await editor.getByLabel("Název kritéria 1", { exact: true }).fill("Kompozice"); await editor.getByLabel("Body kritéria 1", { exact: true }).fill("60");

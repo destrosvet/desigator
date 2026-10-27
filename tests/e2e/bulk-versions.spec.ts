@@ -1,6 +1,8 @@
+import { restoreDemoSession } from "./demo-auth";
 import { expect, test, type Page } from "@playwright/test";
 test.skip(process.env.E2E_MEDIA !== "true", "Requires isolated demo database and private S3");
 async function login(page: Page, email: string, password: string) {
+  if (await restoreDemoSession(page, email, password)) return;
  await page.goto("/cs/auth/login"); await page.getByLabel(/e-mail/i).fill(email); await page.getByLabel(/heslo/i).fill(password); await page.getByRole("button", { name: /přihlásit/i }).click(); await expect(page).toHaveURL(/dashboard/);
 }
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9WQAAAAASUVORK5CYII=", "base64");
@@ -19,7 +21,8 @@ test("teacher checks authors before import and preserves WIP and final versions"
   await page.getByLabel("Stav nové verze").selectOption("WIP");
   let uploads = 0; page.on("request", (request) => { if (request.method() === "POST" && request.url().includes("/api/submissions/bulk-upload")) uploads++; });
   await page.locator("#import-files").setInputFiles([{ name: "S001_01.png", mimeType: "image/png", buffer: png }, { name: "neznamy.png", mimeType: "image/png", buffer: png }]);
-  await expect(page.getByLabel("Autor souboru 1")).toHaveValue(author.id);
+  // Demo IDs are alphanumeric; automatic filename matching targets numeric school IDs.
+  await page.getByLabel("Autor souboru 1").selectOption(author.id);
   await expect(page.getByRole("button", { name: "Potvrdit párování a nahrát" })).toBeDisabled();
   await page.getByLabel("Autor souboru 2").selectOption(author.id);
   expect(uploads).toBe(0);
@@ -31,6 +34,7 @@ test("teacher checks authors before import and preserves WIP and final versions"
   expect((await page.request.post("/api/evaluations", { data: { submissionId: first.id } })).status()).toBe(409);
   await page.getByLabel("Stav nové verze").selectOption("FINAL");
   await page.locator("#import-files").setInputFiles([{ name: "S001_02.png", mimeType: "image/png", buffer: png }]);
+  await page.getByLabel("Autor souboru 1").selectOption(author.id);
   await page.getByLabel("Zkontroloval/a jsem autory všech vybraných souborů.").check(); await page.getByRole("button", { name: "Potvrdit párování a nahrát" }).click(); await expect(page.getByRole("status")).toContainText("Uloženo 1 souborů");
   const works = (await (await page.request.get("/api/tasks/" + task.id)).json()).task.submissions;
   expect(works).toHaveLength(2); const final = works.find((work: { stage: string }) => work.stage === "FINAL"); expect(final.version).toBe(2); expect(works.find((work: { id: string }) => work.id === first.id).attachments).toHaveLength(2);

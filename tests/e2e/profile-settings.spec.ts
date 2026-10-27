@@ -1,6 +1,8 @@
+import { restoreDemoSession } from "./demo-auth";
 import { expect, test, type Page } from "@playwright/test";
 test.skip(process.env.E2E_WORKFLOW !== "true", "Requires isolated seeded database");
 async function login(page: Page, email: string, password: string) {
+  if (await restoreDemoSession(page, email, password)) return;
   await page.goto("/cs/auth/login"); await page.getByLabel(/e-mail/i).fill(email); await page.getByLabel(/heslo/i).fill(password); await page.getByRole("button", { name: /přihlásit/i }).click(); await expect(page).toHaveURL(/dashboard/);
 }
 test("teacher persists and clears institution in own profile", async ({ browser, baseURL }) => {

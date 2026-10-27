@@ -19,7 +19,7 @@ test("review is the primary header action for teacher and reviewer; import belon
    expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(await review.evaluate((node) => getComputedStyle(node).backgroundColor));
   }
   await teacher.goto("/cs/tasks/" + task.id); await headerAction(teacher);
-  const workSection = teacher.locator('[data-slot="card"]').filter({ has: teacher.getByText("Studenti a odevzdání", { exact: true }) });
+  const workSection = teacher.getByRole("group", { name: "Akce zadání", exact: true });
   const upload = workSection.getByRole("button", { name: "Hromadně nahrát práce", exact: true }); await expect(upload).toBeVisible(); await expect(upload).not.toHaveClass(/primary-action/);
   await teacher.screenshot({ path: testInfo.outputPath("teacher-task-actions.png"), fullPage: true });
   await upload.click(); await expect(teacher).toHaveURL(new RegExp("bulk-upload\\?taskId=" + task.id));

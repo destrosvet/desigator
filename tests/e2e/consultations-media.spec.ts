@@ -1,3 +1,4 @@
+import { restoreDemoSession } from "./demo-auth";
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
 import { teacherStatePath } from "./auth-setup";
@@ -5,6 +6,7 @@ import { glbFixture, pdfFixture } from "../helpers/media-fixtures";
 test.skip(process.env.E2E_MEDIA !== "true", "Requires isolated demo database and private S3");
 test.use({ actionTimeout: 10000, channel: "chromium" });
 async function login(page: Page, email: string) {
+ if (await restoreDemoSession(page, email, "student123")) return;
  await page.goto("/cs/auth/login"); await page.getByLabel(/e-mail/i).fill(email); await page.getByLabel(/heslo/i).fill("student123"); await page.getByRole("button", { name: /přihlásit/i }).click(); await page.waitForURL(/dashboard/);
 }
 test("student and teacher consult one WIP version with private PDF and animated GLB previews", async ({ browser, baseURL }, testInfo) => {

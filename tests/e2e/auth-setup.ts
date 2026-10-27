@@ -1,16 +1,24 @@
 import { chromium, type FullConfig } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-export const teacherStatePath = path.resolve(".next/e2e-auth/teacher.json");
+import { demoAccounts, demoStatePath } from "./demo-auth";
+export const teacherStatePath = demoStatePath("teacher");
 export default async function setup(config: FullConfig) {
-  if (process.env.E2E_WORKFLOW !== "true" && process.env.E2E_MEDIA !== "true") return;
+  if (!["E2E_WORKFLOW", "E2E_MEDIA", "E2E_STATISTICS"].some(key => process.env[key] === "true")) return;
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ baseURL: config.projects[0].use.baseURL });
-    await page.goto("/cs/auth/login");
-    await page.getByLabel(/e-mail/i).fill("teacher@desigator.cz"); await page.getByLabel(/heslo/i).fill("teacher123");
-    await page.getByRole("button", { name: /přihlásit/i }).click(); await page.waitForURL(/dashboard/);
     await mkdir(path.dirname(teacherStatePath), { recursive: true });
-    await page.context().storageState({ path: teacherStatePath });
+    for (const account of demoAccounts) {
+      const context = await browser.newContext({ baseURL: config.projects[0].use.baseURL });
+      try {
+        const page = await context.newPage();
+        await page.goto("/cs/auth/login");
+        await page.getByLabel(/e-mail/i).fill(account.email);
+        await page.getByLabel(/heslo/i).fill(account.password);
+        await page.getByRole("button", { name: /přihlásit/i }).click();
+        await page.waitForURL(/dashboard/);
+        await context.storageState({ path: demoStatePath(account.key) });
+      } finally { await context.close(); }
+    }
   } finally { await browser.close(); }
 }

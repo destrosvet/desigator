@@ -1,8 +1,10 @@
+import { restoreDemoSession } from "./demo-auth";
 import { teacherStatePath } from "./auth-setup";
 import { expect, test, type Page } from "@playwright/test";
 import { zipSync, strToU8 } from "fflate";
 test.skip(process.env.E2E_WORKFLOW !== "true", "Requires isolated seeded database");
 async function login(page: Page, email: string, password: string) {
+  if (await restoreDemoSession(page, email, password)) return;
   await page.goto("/cs/auth/login"); await page.getByLabel(/e-mail/i).fill(email); await page.getByLabel(/heslo/i).fill(password); await page.getByRole("button", { name: /přihlásit/i }).click(); await expect(page).toHaveURL(/dashboard/);
 }
 function workbook() {
@@ -26,7 +28,7 @@ test("teacher maps CSV columns, excludes errors and confirms class import withou
     const csv = '\uFEFFIdentifikátor;Příjmení;Jméno;Kontakt\r\n' + externalId + ';Černá;Žaneta;' + email + '\r\nS001;Původní;Student;student1@desigator.cz\r\nBAD;Chybný;Řádek;neplatny-email';
     const student = await studentContext.newPage(); await login(student, "student1@desigator.cz", "student123");
     expect((await student.request.post("/api/classes/" + cls.id + "/students/import", { data: { rows: [], confirmed: false } })).status()).toBe(403);
-    await page.goto("/cs/classes/" + cls.id); await page.getByRole("button", { name: "Importovat studenty z CSV / Excelu", exact: true }).click();
+    await page.goto("/cs/classes/" + cls.id); await page.getByRole("button", { name: "Nahrát CSV / XLSX", exact: true }).click();
     await page.getByLabel("CSV nebo Excel (.xlsx), do 5 MB", { exact: true }).setInputFiles({ name: "studenti.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
     await page.getByRole("button", { name: "Načíst soubor", exact: true }).click();
     await expect(page.getByLabel("List souboru", { exact: true })).toBeVisible();

@@ -11,7 +11,7 @@ test("teacher decimal overview, private and visible corrections, student isolati
  const students=await Promise.all(["S001","S002"].map((id,i)=>db.user.create({data:{name:i?"Other private student":"Adjusted student",email:randomUUID()+"@example.test",password,role:"STUDENT",roles:["STUDENT"],externalId:id,organizationId:school.id}})));
  const reviewers=[teacher];for(let i=0;i<4;i++)reviewers.push(await db.user.create({data:{name:"Adjustment evaluator "+i,email:randomUUID()+"@example.test",password,role:"EVALUATOR",roles:["EVALUATOR"],organizationId:school.id}}));
  const classroom=await db.class.create({data:{name:"Adjustment test class",code:randomUUID(),teacherId:teacher.id,organizationId:school.id,students:{create:students.map(student=>({studentId:student.id}))}}});
- const subject=await db.subject.create({data:{name:"Decimal assessment",year:2026,classId:classroom.id,teacherId:teacher.id}});
+ const subject=await db.subject.create({data:{name:"Decimal assessment",year:2026,classId:classroom.id,classes:{create:{classId:classroom.id}},teacherId:teacher.id}});
  const task=await db.task.create({data:{title:"Final portfolio",maxPoints:100,status:"PUBLISHED",subjectId:subject.id,creatorId:teacher.id}});
  await db.submission.create({data:{taskId:task.id,studentId:students[0].id,stage:"FINAL",resultsPublishedAt:new Date(),resultsPublishedById:teacher.id,evaluations:{create:reviewers.map((reviewer,i)=>({evaluatorId:reviewer.id,status:"COMPLETED",totalPoints:i?90:89}))}}});
  const tc=await browser.newContext({baseURL}),sc=await browser.newContext({baseURL}),ac=await browser.newContext({baseURL}),oc=await browser.newContext({baseURL});

@@ -1,9 +1,11 @@
+import { restoreDemoSession } from "./demo-auth";
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
 
 test.skip(process.env.E2E_MEDIA !== "true", "Requires isolated demo DB and private test MinIO");
 
 async function login(page: Page, email: string, password: string) {
+  if (await restoreDemoSession(page, email, password)) return;
   await page.goto("/cs/auth/login");
   await page.getByLabel(/e-mail/i).fill(email);
   await page.getByLabel(/heslo/i).fill(password);
@@ -71,7 +73,7 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     expect(await download.body()).toEqual(image);
 
     await reviewer.goto(`/cs/evaluations?taskId=${task.id}&search=${encodeURIComponent(title)}`);
-    const card = reviewer.getByRole("link", { name: `Hodnotit: ${title} – Student 1`, exact: true });
+    const card = reviewer.locator(`a[href$="/evaluations/${evaluation.id}"]`);
     await expect(card).toBeVisible();
     await expect.poll(() => card.getByRole("img").evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await card.click();
@@ -154,7 +156,7 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByRole("link", { name: /^Hodnotit:/ })).toHaveCount(0);
     await reviewer.getByRole("link").filter({ has: reviewer.getByRole("heading", { name: title, exact: true }) }).click();
     await expect(reviewer.getByRole("link", { name: /^Hodnotit:/ })).toHaveCount(2);
-    await reviewer.getByRole("link", { name: `Hodnotit: ${title} – Student 1`, exact: true }).click();
+    await reviewer.locator(`a[href$="/evaluations/${evaluation.id}"]`).click();
     await reviewer.getByRole("button", { name: "Další student", exact: true }).click();
     await expect(reviewer.getByTestId("current-student")).toHaveText("Student 2");
     const slider = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });
