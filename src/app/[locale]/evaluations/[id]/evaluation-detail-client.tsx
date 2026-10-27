@@ -47,7 +47,7 @@ export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdi
   return <AppShell compact><div className="mx-auto max-w-[1600px] space-y-3">
     <header className="flex flex-wrap items-center gap-3 pl-11 lg:pl-0">
       <Button variant="outline" size="sm" onClick={() => void leave(gridHref)} disabled={navigating}><Grid2X2 className="mr-1.5 size-4" />Grid</Button>
-      <div className="min-w-0 flex-1"><h1 className="truncate text-xl font-bold" data-testid="current-student">Anonymní práce {index + 1}</h1><p className="truncate text-xs text-muted-foreground" title={task.title}>{task.title} · verze {work.submission.version ?? 1}</p></div>
+      <div className="min-w-0 flex-1"><h1 className="truncate text-xl font-bold" data-testid="current-student">{work.submission.student?.name || `Anonymní práce ${index + 1}`}</h1><p className="truncate text-xs text-muted-foreground" title={task.title}>{task.title} · verze {work.submission.version ?? 1}</p></div>
       <Badge variant={form.status === "COMPLETED" ? "default" : "secondary"} className="hidden sm:inline-flex">{statusLabels[form.status]}</Badge>
       <div className="flex items-center gap-1" aria-label="Přepínání studentů">
         <Button variant="outline" size="icon" aria-label="Předchozí student" title="Předchozí student (←)" onClick={() => previous && void goTo(previous.id)} disabled={!previous || navigating}><ArrowLeft className="size-4" /></Button>

@@ -7,6 +7,7 @@ export type ReviewWork = {
   submission: {
     version?: number; stage?: string; resultsPublishedAt?: string | null;
     content: string | null;
+    student?: { name: string; email: string };
     attachments: WorkAttachment[];
     task: { id: string; title: string; description: string | null; instructions: string | null; maxPoints: number;
       criteria: Array<{ id: string; name: string; description: string | null; maxPoints: number }>;
@@ -14,7 +15,7 @@ export type ReviewWork = {
   };
 };
 
-export type ReviewQueueItem = { id: string; status: string; totalPoints: number | null };
+export type ReviewQueueItem = { id: string; status: string; totalPoints: number | null; submission?: { student: { name: string } } };
 
 export type ReviewDraft = {
   readOnly: boolean;

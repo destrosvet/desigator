@@ -7,6 +7,7 @@ export function hasRole(user: Pick<PermissionUser, "role" | "roles">, role: stri
 export function isAdmin(user: PermissionUser): boolean { return hasRole(user, "ADMIN"); }
 export function isSchoolAdmin(user: PermissionUser): boolean { return !!user.organizationId && hasRole(user, "SCHOOL_ADMIN"); }
 export function canTeach(user: PermissionUser): boolean { return isAdmin(user) || isSchoolAdmin(user) || hasRole(user, "TEACHER"); }
+export function anonymousEvaluation(user: PermissionUser): boolean { return hasRole(user, "EVALUATOR") && !canTeach(user); }
 export function primaryRole(roles: string[]): string {
   if (roles.includes("ADMIN")) return "ADMIN";
   if (roles.includes("TEACHER") || roles.includes("SCHOOL_ADMIN")) return "TEACHER";

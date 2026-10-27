@@ -1,4 +1,4 @@
-import { canEvaluate, isAdmin } from "@/lib/permissions";
+import { anonymousEvaluation, canEvaluate, isAdmin } from "@/lib/permissions";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -21,6 +21,7 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
       scores: true,
       submission: {
         include: {
+          student: { select: { name: true, email: true } },
           attachments: { select: { id: true, originalName: true, mimeType: true, size: true }, orderBy: { uploadedAt: "asc" as const } },
           task: { include: { criteria: { orderBy: { order: "asc" } } } },
         },
@@ -31,10 +32,12 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
 
   const queue = await db.evaluation.findMany({
     where: { AND: [evaluationScope(session.user), { evaluatorId: evaluation.evaluatorId, submission: { taskId: evaluation.submission.taskId } }] },
-    select: { id: true, status: true, totalPoints: true },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, status: true, totalPoints: true, submission: { select: { student: { select: { name: true } } } } },
+    orderBy: [{ submission: { student: { name: "asc" } } }, { id: "asc" }],
   });
 
-  const anonymousEvaluation = { ...evaluation, submission: { ...evaluation.submission, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } };
-  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(anonymousEvaluation))} queue={queue} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
+  const anonymous = anonymousEvaluation(session.user);
+  const visibleEvaluation = anonymous ? { ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } } : evaluation;
+  const visibleQueue = anonymous ? queue.map(({ submission: _submission, ...item }) => item) : queue;
+  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(visibleEvaluation))} queue={visibleQueue} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
 }

@@ -5,7 +5,7 @@ import { canReadAttachment } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { getFile } from "@/lib/s3";
 import { anonymousAttachmentName, PREVIEW_MODEL_TYPES, PREVIEW_DOCUMENT_TYPES, PREVIEW_IMAGE_TYPES, PREVIEW_VIDEO_TYPES } from "@/lib/media";
-import { hasRole } from "@/lib/permissions";
+import { anonymousEvaluation } from "@/lib/permissions";
 import sharp from "sharp";
 
 export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
@@ -41,7 +41,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
         "Content-Length": String(buffer.length),
         ...((PREVIEW_VIDEO_TYPES.has(attachment.mimeType) || PREVIEW_DOCUMENT_TYPES.has(attachment.mimeType)) ? { "Accept-Ranges": "bytes" } : {}),
         ...(inline && PREVIEW_DOCUMENT_TYPES.has(attachment.mimeType) ? { "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "default-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'" } : {}),
-        "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(hasRole(session.user, "EVALUATOR") ? anonymousAttachmentName(attachment.originalName) : attachment.originalName)}`,
+        "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(anonymousEvaluation(session.user) ? anonymousAttachmentName(attachment.originalName) : attachment.originalName)}`,
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },

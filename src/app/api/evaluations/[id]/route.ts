@@ -7,6 +7,7 @@ import { canManageEvaluation } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { evaluationScope } from "@/lib/evaluations";
 import { anonymousAttachmentName } from "@/lib/media";
+import { anonymousEvaluation } from "@/lib/permissions";
 
 const evaluationSchema = z.object({
   feedback: z.string().max(10000).nullable().optional(),
@@ -32,6 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       scores: true,
       submission: {
         include: {
+          student: { select: { id: true, name: true, email: true } },
           attachments: { select: { id: true, originalName: true, mimeType: true, size: true, s3Url: true } },
           task: { include: { criteria: { orderBy: { order: "asc" } } } },
         },
@@ -39,8 +41,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
   });
   if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
-  const anonymousEvaluation = { ...evaluation, submission: { ...evaluation.submission, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } };
-  return NextResponse.json({ evaluation: anonymousEvaluation }, { headers: { "Cache-Control": "private, no-store" } });
+  const visibleEvaluation = anonymousEvaluation(session.user) ? { ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } } : evaluation;
+  return NextResponse.json({ evaluation: visibleEvaluation }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
