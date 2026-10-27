@@ -3,7 +3,7 @@ import { draftFromWork, draftScores, isFullyRated, type ReviewWork } from "@/lib
 
 const work: ReviewWork = {
   id: "review", status: "PENDING", totalPoints: null, feedback: null, evaluator: { name: "Reviewer" }, scores: [],
-  submission: { content: null, student: { name: "Student", email: "student@example.cz" }, attachments: [], task: { id: "task", title: "Poster", description: null, instructions: null, maxPoints: 100, criteria: [{ id: "composition", name: "Composition", description: null, maxPoints: 60 }, { id: "craft", name: "Craft", description: null, maxPoints: 40 }] } },
+  submission: { content: null, attachments: [], task: { id: "task", title: "Poster", description: null, instructions: null, maxPoints: 100, criteria: [{ id: "composition", name: "Composition", description: null, maxPoints: 60 }, { id: "craft", name: "Craft", description: null, maxPoints: 40 }] } },
 };
 
 describe("rapid review drafts", () => {

@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EvaluationDetailClient } from "./evaluation-detail-client";
 import { evaluationScope } from "@/lib/evaluations";
+import { anonymousAttachmentName } from "@/lib/media";
 
 export default async function EvaluationDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
@@ -20,7 +21,6 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
       scores: true,
       submission: {
         include: {
-          student: { select: { name: true, email: true } },
           attachments: { select: { id: true, originalName: true, mimeType: true, size: true }, orderBy: { uploadedAt: "asc" as const } },
           task: { include: { criteria: { orderBy: { order: "asc" } } } },
         },
@@ -31,9 +31,10 @@ export default async function EvaluationDetailPage({ params }: { params: Promise
 
   const queue = await db.evaluation.findMany({
     where: { AND: [evaluationScope(session.user), { evaluatorId: evaluation.evaluatorId, submission: { taskId: evaluation.submission.taskId } }] },
-    select: { id: true, status: true, totalPoints: true, submission: { select: { student: { select: { name: true } } } } },
-    orderBy: [{ submission: { student: { name: "asc" } } }, { id: "asc" }],
+    select: { id: true, status: true, totalPoints: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
 
-  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(evaluation))} queue={queue} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
+  const anonymousEvaluation = { ...evaluation, submission: { ...evaluation.submission, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } };
+  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(anonymousEvaluation))} queue={queue} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
 }

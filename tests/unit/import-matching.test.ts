@@ -1,4 +1,4 @@
-import { uploadFileSizeLimit } from "@/lib/media";
+import { anonymousAttachmentName, uploadFileSizeLimit } from "@/lib/media";
 import { describe, expect, it } from "vitest";
 import { extractStudentId, suggestStudent } from "@/lib/import-matching";
 describe("school ID filename matching", () => {
@@ -11,4 +11,8 @@ it("allows 100 MB only for MP4 and retains 25 MB for other formats", () => {
   expect(uploadFileSizeLimit("video/mp4")).toBe(100 * 1024 * 1024);
   expect(uploadFileSizeLimit("video/webm")).toBe(25 * 1024 * 1024);
   expect(uploadFileSizeLimit("image/jpeg")).toBe(25 * 1024 * 1024);
+});
+
+it("removes student identifiers from attachment names shown during evaluation", () => {
+  expect(anonymousAttachmentName("4464341 Jan Novak pohled.JPG", 1)).toBe("Příloha 2.jpg");
 });

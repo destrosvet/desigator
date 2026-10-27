@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { AuthUser } from "@/lib/authorization";
+import { anonymousAttachmentName } from "@/lib/media";
 
 export function evaluationScope(user: AuthUser): Prisma.EvaluationWhereInput {
  if (isAdmin(user)) return {};
@@ -38,7 +39,6 @@ export async function listEvaluations(user: AuthUser, query: z.infer<typeof eval
     ...(evaluatorId ? [{ evaluatorId }] : []),
     ...(search ? [{ OR: [
       { submission: { task: { title: { contains: search, mode: "insensitive" as const } } } },
-      { submission: { student: { name: { contains: search, mode: "insensitive" as const } } } },
       { feedback: { contains: search, mode: "insensitive" as const } },
     ] }] : []),
   ] };
@@ -50,7 +50,6 @@ export async function listEvaluations(user: AuthUser, query: z.infer<typeof eval
         evaluator: { select: { id: true, name: true } },
         submission: { select: {
           id: true, submittedAt: true,
-          student: { select: { id: true, name: true } },
           attachments: { select: { id: true, originalName: true, mimeType: true, size: true }, orderBy: { uploadedAt: "asc" } },
           task: { select: { id: true, title: true, maxPoints: true, subject: { select: { name: true } } } },
         } },
@@ -59,5 +58,5 @@ export async function listEvaluations(user: AuthUser, query: z.infer<typeof eval
     }),
     db.evaluation.count({ where }),
   ]);
-  return { evaluations, total, page, limit };
+  return { evaluations: evaluations.map((evaluation) => ({ ...evaluation, submission: { ...evaluation.submission, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } })), total, page, limit };
 }

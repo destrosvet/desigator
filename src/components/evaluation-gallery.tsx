@@ -13,7 +13,7 @@ import { attachmentUrl, PREVIEW_IMAGE_TYPES, type WorkAttachment } from "@/lib/m
 type GalleryWork = {
   id: string; status: string; totalPoints: number | null;
   evaluator: { name: string };
-  submission: { id: string; student: { name: string }; attachments: WorkAttachment[]; task: { title: string; maxPoints: number; subject: { name: string } } };
+  submission: { id: string; attachments: WorkAttachment[]; task: { title: string; maxPoints: number; subject: { name: string } } };
 };
 
 export const evaluationStatusLabels: Record<string, string> = { PENDING: "Čeká na hodnocení", IN_PROGRESS: "Rozpracováno", COMPLETED: "Dokončeno" };
@@ -61,17 +61,18 @@ export function EvaluationGallery({ evaluations, total, page, limit, search, sta
       {studentId ? <input type="hidden" name="studentId" value={studentId} /> : null}
       {evaluatorId ? <input type="hidden" name="evaluatorId" value={evaluatorId} /> : null}
       <input type="hidden" name="limit" value={limit} />
-      <div className="min-w-44 flex-1 space-y-1"><Label htmlFor="review-search" className="text-xs">Student nebo zadání</Label><Input id="review-search" name="search" defaultValue={search} placeholder="Vyhledat práci…" /></div>
+      <div className="min-w-44 flex-1 space-y-1"><Label htmlFor="review-search" className="text-xs">Zadání nebo zpětná vazba</Label><Input id="review-search" name="search" defaultValue={search} placeholder="Vyhledat práci…" /></div>
       <div className="min-w-44 flex-1 space-y-1"><Label htmlFor="review-task" className="text-xs">Zadání</Label><select id="review-task" name="taskId" defaultValue={taskId || ""} className="h-9 w-full rounded-md border bg-background px-2 text-sm">{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></div>
       <div className="space-y-1"><Label htmlFor="review-status" className="text-xs">Stav</Label><select id="review-status" name="status" defaultValue={status} className="h-9 w-full rounded-md border bg-background px-2 text-sm"><option value="">Všechny stavy</option>{Object.entries(evaluationStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
       <Button type="submit" variant="secondary"><Search className="mr-1.5 size-4" />Filtrovat</Button>
     </form>
     {!items.length ? <div className="rounded-xl border border-dashed py-16 text-center"><FileImage className="mx-auto mb-3 size-9 text-muted-foreground" /><h2 className="font-semibold">Žádné práce v tomto výběru</h2><p className="mt-2 text-sm text-muted-foreground">Upravte filtr. Nové práce se zobrazí po přiřazení hodnocení.</p></div> : <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" aria-label="Grid studentských prací">
-      {items.map((evaluation) => {
+      {items.map((evaluation, itemIndex) => {
         const image = evaluation.submission.attachments.find((file) => PREVIEW_IMAGE_TYPES.has(file.mimeType));
-        return <Link key={evaluation.id} href={`/evaluations/${evaluation.id}`} className="group overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-primary" aria-label={`Hodnotit: ${evaluation.submission.task.title} – ${evaluation.submission.student.name}`}>
+        const anonymousNumber = (page - 1) * limit + itemIndex + 1;
+        return <Link key={evaluation.id} href={`/evaluations/${evaluation.id}`} className="group overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-primary" aria-label={`Hodnotit anonymní práci ${anonymousNumber}: ${evaluation.submission.task.title}`}>
           <div className="relative aspect-[4/3] overflow-hidden border-b bg-muted/40 p-1.5"><Cover file={image} /><span className="absolute right-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[10px]">{evaluation.submission.attachments.length} pohledů</span><span title={evaluationStatusLabels[evaluation.status]} className={`absolute bottom-1.5 left-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${evaluation.status === "COMPLETED" ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/95 dark:text-emerald-200" : evaluation.status === "IN_PROGRESS" ? "bg-amber-100 text-amber-900 dark:bg-amber-950/95 dark:text-amber-200" : "bg-background/90 text-muted-foreground"}`}>{evaluation.status === "COMPLETED" ? `${evaluation.totalPoints ?? 0} / ${evaluation.submission.task.maxPoints} b.` : evaluation.status === "IN_PROGRESS" ? "Rozpracováno" : "Nehodnoceno"}</span></div>
-          <div className="space-y-0.5 px-2.5 py-2"><h2 className="truncate text-sm font-semibold">{evaluation.submission.student.name}</h2>{!taskId ? <p className="truncate text-xs text-muted-foreground" title={evaluation.submission.task.title}>{evaluation.submission.task.title}</p> : null}{showEvaluator ? <p className="truncate text-[11px] text-muted-foreground">{evaluation.evaluator.name}</p> : null}</div>
+          <div className="space-y-0.5 px-2.5 py-2"><h2 className="truncate text-sm font-semibold">Anonymní práce {anonymousNumber}</h2>{!taskId ? <p className="truncate text-xs text-muted-foreground" title={evaluation.submission.task.title}>{evaluation.submission.task.title}</p> : null}{showEvaluator ? <p className="truncate text-[11px] text-muted-foreground">{evaluation.evaluator.name}</p> : null}</div>
         </Link>;
       })}
     </div>}
