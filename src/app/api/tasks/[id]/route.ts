@@ -63,19 +63,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const current = await tx.task.findUnique({ where: { id }, include: { criteria: { orderBy: { order: "asc" } } } });
       if (!current) return { error: "Zadání nebylo nalezeno.", status: 404 };
       const { criteria, ...fields } = data;
-      const nextCriteria = criteria ?? current.criteria;
+      const publishing = (data.status ?? current.status) === "PUBLISHED";
+      const autoCriterion = publishing && (criteria ?? current.criteria).length === 0;
+      const nextCriteria = autoCriterion ? [{ name: "Celkové hodnocení", description: null, maxPoints: data.maxPoints ?? current.maxPoints }] : criteria ?? current.criteria;
       const nextMax = data.maxPoints ?? current.maxPoints;
-      const changingRubric = criteria !== undefined || (data.maxPoints !== undefined && data.maxPoints !== current.maxPoints);
+      const changingRubric = criteria !== undefined || autoCriterion || (data.maxPoints !== undefined && data.maxPoints !== current.maxPoints);
       if (changingRubric && await tx.evaluation.count({ where: { submission: { taskId: id } } })) {
         return { error: "Kritéria a bodové maximum jsou po přiřazení hodnocení uzamčené. Použijte kopii zadání.", status: 409 };
       }
       if (criteria?.some((criterion) => criterion.id && !current.criteria.some((item) => item.id === criterion.id))) return { error: "Kritérium nepatří tomuto zadání.", status: 400 };
-      const error = rubricError(nextCriteria, nextMax, (data.status ?? current.status) === "PUBLISHED");
+      const error = rubricError(nextCriteria, nextMax, publishing);
       if (error) return { error, status: 400 };
-      if (criteria) {
-        await tx.evaluationCriterion.deleteMany({ where: { taskId: id, id: { notIn: criteria.flatMap((item) => item.id ? [item.id] : []) } } });
-        for (const [order, criterion] of criteria.entries()) {
-          const { id: criterionId, ...values } = criterion;
+      const criteriaToSave = autoCriterion ? nextCriteria : criteria;
+      if (criteriaToSave) {
+        await tx.evaluationCriterion.deleteMany({ where: { taskId: id, id: { notIn: criteriaToSave.flatMap((item) => "id" in item && item.id ? [item.id] : []) } } });
+        for (const [order, criterion] of criteriaToSave.entries()) {
+          const criterionId = "id" in criterion ? criterion.id : undefined;
+          const { id: _criterionId, ...values } = criterion as typeof criterion & { id?: string };
           if (criterionId) await tx.evaluationCriterion.update({ where: { id: criterionId }, data: { ...values, order } });
           else await tx.evaluationCriterion.create({ data: { ...values, order, taskId: id } });
         }
