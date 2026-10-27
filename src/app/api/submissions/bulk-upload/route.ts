@@ -11,7 +11,7 @@ import { canManageTask } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { deleteFile, uploadFile } from "@/lib/s3";
 
-const MAX_FILES = 20;
+const MAX_FILES = 100;
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([MODEL_MIME_TYPE, "video/mp4", "video/webm", "application/pdf", "application/zip", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
     if (typeof taskId !== "string" || !taskId) return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
     if (!(await canManageTask(session.user, taskId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (files.length === 0 || files.length > MAX_FILES) return NextResponse.json({ error: `Upload must contain 1-${MAX_FILES} files` }, { status: 400 });
+    if (files.length === 0 || files.length > MAX_FILES) return NextResponse.json({ error: `Dávka musí obsahovat 1 až ${MAX_FILES} souborů.` }, { status: 400 });
     if (files.some((file) => file.size > uploadFileSizeLimit(file.type))) return NextResponse.json({ error: "Soubor překračuje limit: MP4 100 MB, ostatní formáty 25 MB." }, { status: 413 });
     if (files.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_SIZE) return NextResponse.json({ error: "Upload exceeds the 100 MB total limit" }, { status: 413 });
     if (files.some((file) => !ALLOWED_MIME_TYPES.has(file.type) || !/[.](jpe?g|png|webp|gif|pdf|zip|mp4|webm|glb)$/i.test(file.name))) return NextResponse.json({ error: "Unsupported file type" }, { status: 415 });
