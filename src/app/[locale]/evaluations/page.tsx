@@ -7,6 +7,8 @@ import { AppShell } from "@/components/app-shell";
 import { EvaluationGallery } from "@/components/evaluation-gallery";
 import { Link } from "@/components/navigation";
 import { anonymousEvaluation } from "@/lib/permissions";
+import { canManageTask } from "@/lib/authorization";
+import { readTaskPublication } from "@/lib/task-result-publication";
 
 export default async function EvaluationsPage({ params, searchParams }: {
   params: Promise<{ locale: string }>;
@@ -35,8 +37,11 @@ export default async function EvaluationsPage({ params, searchParams }: {
   if ((parsed.data.taskId && !selectedTask) || (subjectId && !subject)) notFound();
   const breadcrumbs = <nav aria-label="Drobečková navigace" className="mb-5 flex flex-wrap gap-2 text-sm text-muted-foreground"><Link href="/evaluations" className="hover:underline">Předměty</Link>{subject ? <><span>/</span><Link href={`/evaluations?subjectId=${subject.id}`} className="hover:underline">{subject.name}</Link></> : null}{selectedTask ? <><span>/</span><span className="text-foreground">{selectedTask.title}</span></> : null}</nav>;
   if (selectedTask) {
-    const result = await listEvaluations(session.user, parsed.data);
-    return <AppShell>{breadcrumbs}<EvaluationGallery key={JSON.stringify(parsed.data)} {...JSON.parse(JSON.stringify(result))} search={parsed.data.search} status={parsed.data.status || ""} taskId={selectedTask.id} studentId={parsed.data.studentId} evaluatorId={parsed.data.evaluatorId} tasks={summaries.filter((task) => task.subject.id === subjectId).map(({ id, title }) => ({ id, title }))} anonymous={anonymousEvaluation(session.user)} showEvaluator={session.user.role !== "EVALUATOR"} /></AppShell>;
+    const [result, publication] = await Promise.all([
+      listEvaluations(session.user, parsed.data),
+      canManageTask(session.user, selectedTask.id).then(allowed => allowed ? readTaskPublication(selectedTask.id) : undefined),
+    ]);
+    return <AppShell>{breadcrumbs}<EvaluationGallery key={JSON.stringify(parsed.data)} {...JSON.parse(JSON.stringify(result))} search={parsed.data.search} status={parsed.data.status || ""} taskId={selectedTask.id} publication={publication ?? undefined} studentId={parsed.data.studentId} evaluatorId={parsed.data.evaluatorId} tasks={summaries.filter((task) => task.subject.id === subjectId).map(({ id, title }) => ({ id, title }))} anonymous={anonymousEvaluation(session.user)} showEvaluator={session.user.role !== "EVALUATOR"} /></AppShell>;
   }
   const subjects = [...new Map(summaries.map((task) => [task.subject.id, task.subject])).values()].sort((a, b) => a.name.localeCompare(b.name, "cs"));
   const cards = subject ? summaries.filter((task) => task.subject.id === subject.id).map((task) => ({ id: task.id, title: task.title, detail: "Studentské práce v úkolu", total: task.total, completed: task.completed, href: `/evaluations?taskId=${task.id}` })) : subjects.map((item) => {

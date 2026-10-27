@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import { reviewFilterQuery } from "@/lib/review-filters";
+import { TaskResultPublicationControls } from "@/components/task-result-publication-controls";
+import type { TaskPublicationSummary } from "@/lib/task-publication-policy";
 import { FileImage, Search, Loader2 } from "lucide-react";
 import { Link } from "@/components/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +26,9 @@ function Cover({ file }: { file?: WorkAttachment }) {
   return file && !failed ? <img src={attachmentUrl(file.id, "thumbnail")} alt={`Náhled ${file.originalName}`} loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-contain transition-transform duration-150 group-hover:scale-[1.025]" /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground"><FileImage className="size-7" /><span className="text-xs">{failed ? "Náhled není dostupný" : "Bez náhledu"}</span></div>;
 }
 
-type GalleryProps = { evaluations: GalleryWork[]; total: number; page: number; limit: number; search: string; status: string; taskId?: string; studentId?: string; evaluatorId?: string; tasks: Array<{ id: string; title: string }>; anonymous: boolean; showEvaluator: boolean };
+type GalleryProps = { evaluations: GalleryWork[]; total: number; page: number; limit: number; search: string; status: string; taskId?: string; studentId?: string; evaluatorId?: string; tasks: Array<{ id: string; title: string }>; anonymous: boolean; showEvaluator: boolean; publication?: TaskPublicationSummary };
 
-export function EvaluationGallery({ evaluations, total, page, limit, search, status, taskId, studentId, evaluatorId, tasks, anonymous, showEvaluator }: GalleryProps) {
+export function EvaluationGallery({ evaluations, total, page, limit, search, status, taskId, studentId, evaluatorId, tasks, anonymous, showEvaluator, publication }: GalleryProps) {
   const locale = useLocale();
   const reviewQuery = reviewFilterQuery({ taskId, studentId, evaluatorId, search, status, page, limit });
   const [items, setItems] = useState(evaluations);
@@ -59,6 +61,7 @@ export function EvaluationGallery({ evaluations, total, page, limit, search, sta
 
   return <div className="space-y-4">
     <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">{tasks.find((task) => task.id === taskId)?.title || "Práce k hodnocení"}</h1><p className="mt-1 text-sm text-muted-foreground">Vyberte práci z gridu. V detailu hodnotíte posuvníky a studenty přepínáte šipkami ← →.</p></div><Badge variant="secondary" className="px-3 py-1">{total} prací</Badge></header>
+    {taskId && publication ? <TaskResultPublicationControls taskId={taskId} summary={publication} /> : null}
     <form method="get" action={`/${locale}/evaluations`} className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3">
       {studentId ? <input type="hidden" name="studentId" value={studentId} /> : null}
       {evaluatorId ? <input type="hidden" name="evaluatorId" value={evaluatorId} /> : null}

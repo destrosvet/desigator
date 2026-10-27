@@ -10,7 +10,7 @@ export type ReviewWork = {
     content: string | null;
     student?: { name: string; email: string };
     attachments: WorkAttachment[];
-    task: { id: string; title: string; description: string | null; instructions: string | null; maxPoints: number;
+    task: { resultsPublishedAt?: string | null; id: string; title: string; description: string | null; instructions: string | null; maxPoints: number;
       criteria: Array<{ id: string; name: string; description: string | null; maxPoints: number }>;
     };
   };
@@ -28,7 +28,7 @@ export type ReviewDraft = {
 export function draftFromWork(work: ReviewWork): ReviewDraft {
   const scores = new Map(work.scores.map((score) => [score.criterionId, score]));
   return {
-    readOnly: Boolean(work.submission.resultsPublishedAt) || work.canEdit === false,
+    readOnly: (Boolean(work.submission.resultsPublishedAt) && !work.submission.task.resultsPublishedAt) || work.canEdit === false,
     id: work.id, feedback: work.feedback || "", status: work.status, revision: 0, savedRevision: 0,
     touched: work.scores.map((score) => score.criterionId), maxPoints: work.submission.task.maxPoints,
     limits: Object.fromEntries(work.submission.task.criteria.map((criterion) => [criterion.id, criterion.maxPoints])),
