@@ -46,6 +46,11 @@ test("teacher enables live task results while reviewers keep editing and complet
   expect(JSON.stringify(data)).not.toMatch(/PRIVATE_|First private student|Second private student/);
   expect((await student.request.get("/api/evaluations/" + firstReview.id)).status()).toBe(200);
   expect((await student.request.get("/api/evaluations/" + waitingReview.id)).status()).toBe(404);
+  const subjectResult = await (await student.request.get("/api/subjects/" + subject.id + "/results")).json();
+  expect(subjectResult.rows[0].cells[0].points).toBe(80);
+  const teacherResult = await (await teacher.request.get("/api/subjects/" + subject.id + "/results")).json();
+  expect(teacherResult.rows.find((row: { studentId: string }) => row.studentId === firstStudent.id).publishedTotal).toBe(80);
+  await db.submission.update({ where: { id: firstWork.id }, data: { resultsPublishedAt: new Date(), resultsPublishedById: teacherUser.id } });
   await reviewer.goto("/cs/evaluations/" + firstReview.id);
   await expect(reviewer.getByLabel("Provedení", { exact: true })).toBeEnabled();
   await reviewer.getByLabel("Provedení", { exact: true }).fill("90");
