@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readTableSort, sortTableRows } from "@/lib/table-sorting";
+import { readTableSort, sortTableRows, surnameSortKey } from "@/lib/table-sorting";
 describe("table ordering", () => {
   it("orders Czech text and numeric portions without mutating source rows", () => {
     const rows = ["Žák 10", "Adam", "Žák 2", "Černý", "Chalupa"];
@@ -14,5 +14,10 @@ describe("table ordering", () => {
   it("ignores unknown sort fields and restricts direction", () => {
     expect(readTableSort(new URLSearchParams("sort=password&order=desc"), ["name"])).toBeNull();
     expect(readTableSort(new URLSearchParams("sort=name&order=invalid"), ["name"])).toEqual({ key: "name", direction: "asc" });
+  });
+  it("derives a Czech list key from the final surname part", () => {
+    expect(surnameSortKey("Jana Nováková")).toBe("Nováková Jana");
+    expect(surnameSortKey("  Petr   Černý  ")).toBe("Černý Petr");
+    expect(surnameSortKey("Madonna")).toBe("Madonna");
   });
 });

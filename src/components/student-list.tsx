@@ -104,7 +104,7 @@ export function StudentList({ fixedClassId, fixedClassName, refreshVersion = 0 }
   ];
 
   const columns = [
-    { key: "name", label: "Jméno", render: (s: Student) => <span className="font-medium">{s.name}</span> },
+    { key: "surname", label: "Jméno a příjmení", render: (s: Student) => <span className="font-medium">{s.name}</span> },
     { key: "email", label: "E-mail" },
     { key: "externalId", label: "Školní ID", render: (s: Student) => s.externalId || "-" },
     { key: "classes", label: "Třídy", render: (s: Student) => (

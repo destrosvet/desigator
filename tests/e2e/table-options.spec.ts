@@ -37,8 +37,8 @@ test("shared columns persist per table and account; server sorting covers all pa
     await expect(page.getByRole("button", { name: "Sloupce", exact: true })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Řadit podle: Předmět", exact: true })).toHaveCount(0);
     await page.goto("/cs/students"); await expect(page.getByRole("columnheader", { name: "Řadit podle: E-mail", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Řadit podle: Jméno", exact: true }).click();
-    await expect(page.getByRole("columnheader", { name: "Řadit podle: Jméno", exact: true })).toHaveAttribute("aria-sort", "ascending");
+    await page.getByRole("button", { name: "Řadit podle: Jméno a příjmení", exact: true }).click();
+    await expect(page.getByRole("columnheader", { name: "Řadit podle: Jméno a příjmení", exact: true })).toHaveAttribute("aria-sort", "ascending");
     await page.goto("/cs/tasks"); await page.getByRole("button", { name: "Sloupce", exact: true }).click();
     for (const label of ["Název", "Třída", "Termín", "Stav"]) await page.getByRole("menuitemcheckbox", { name: label, exact: true }).click();
     await expect(page.getByRole("menuitemcheckbox", { name: "Odevzdání", exact: true })).toBeDisabled();

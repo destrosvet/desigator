@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { emailSchema, newPasswordSchema } from "@/lib/password-policy";
-import { readTableSort, sortTableRows } from "@/lib/table-sorting";
+import { readTableSort, sortTableRows, surnameSortKey } from "@/lib/table-sorting";
 import type { Prisma } from "@prisma/client";
 import { studentScope } from "@/lib/admin-records";
 import { NextResponse } from "next/server";
@@ -35,8 +35,8 @@ export async function GET(req: Request) {
       ];
     }
 
-    const sorting = readTableSort(searchParams, ["name", "email", "externalId", "classes"]);
-    const computedSort = sorting?.key === "classes";
+    const sorting = readTableSort(searchParams, ["surname", "email", "externalId", "classes"]);
+    const computedSort = sorting?.key === "classes" || sorting?.key === "surname";
     const orderBy: Prisma.UserOrderByWithRelationInput[] = [sorting && !computedSort ? { [sorting.key]: sorting.direction } : { createdAt: "desc" }, { id: "asc" }];
     const skip = (page - 1) * limit;
 
@@ -63,7 +63,7 @@ export async function GET(req: Request) {
       db.user.count({ where }),
     ]);
 
-    const ordered = computedSort ? sortTableRows(students, sorting, (row) => row.classMemberships.map((item) => item.class.name).sort((a, b) => a.localeCompare(b, "cs")).join(", ")).slice(skip, skip + limit) : students;
+    const ordered = computedSort ? sortTableRows(students, sorting, (row, key) => key === "surname" ? surnameSortKey(row.name) : row.classMemberships.map((item) => item.class.name).sort((a, b) => a.localeCompare(b, "cs")).join(", ")).slice(skip, skip + limit) : students;
     return NextResponse.json({ students: ordered, total, page, limit });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch students" }, { status: 500 });
