@@ -1,7 +1,6 @@
 export function extractStudentId(filename: string): string | null {
-  const stem = filename.replace(/\.[^.]+$/, "");
-  const match = stem.match(/^([a-z0-9]+)(?:[_-][a-z0-9_-]+)?$/i);
-  return match?.[1].toUpperCase() ?? null;
+  const match = filename.match(/^(\d+)/);
+  return match?.[1] ?? null;
 }
 
 export function suggestStudent(filename: string, students: Array<{ id: string; externalId: string | null }>): string {
