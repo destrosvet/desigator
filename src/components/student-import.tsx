@@ -3,11 +3,12 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { DataTable } from "@/components/data-table";
-import type { ImportDecision } from "@/lib/student-import";
+import { parseCsv, type ImportDecision } from "@/lib/student-import";
 
 type Sheet = { name: string; rows: string[][] };
 type Mapping = { name: string; first: string; last: string; email: string; externalId: string };
@@ -15,8 +16,11 @@ type Result = { created: number; added: number; skipped: number; filled: number;
 const emptyMapping: Mapping = { name: "", first: "", last: "", email: "", externalId: "" };
 export function StudentImport({ classId, className, onImported }: { classId: string; className: string; onImported?: () => void }) {
   const router = useRouter(); const fileInput = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<"single" | "paste" | "file">("file");
   const [open, setOpen] = useState(false); const [sheets, setSheets] = useState<Sheet[]>([]);
   const [sheet, setSheet] = useState(0); const [header, setHeader] = useState(1);
+  const [hasHeader, setHasHeader] = useState(true); const [pasted, setPasted] = useState("");
+  const [single, setSingle] = useState({ name: "", email: "", externalId: "" });
   const [mapping, setMapping] = useState<Mapping>(emptyMapping);
   const [encoding, setEncoding] = useState("utf-8"); const [separator, setSeparator] = useState("auto");
   const [excluded, setExcluded] = useState<number[]>([]);
@@ -24,13 +28,33 @@ export function StudentImport({ classId, className, onImported }: { classId: str
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [confirm, setConfirm] = useState(false);
   const [page, setPage] = useState(1); const [limit, setLimit] = useState(20); const [search, setSearch] = useState("");
-  const raw = sheets[sheet]?.rows || []; const headers = raw[header - 1] || [];
+  const raw = sheets[sheet]?.rows || []; const headers = hasHeader ? raw[header - 1] || [] : [];
+  const dataStart = hasHeader ? header : Math.max(0, header - 1);
   const width = Math.min(50, Math.max(0, ...raw.map((row) => row.length)));
   const value = (row: string[], field: keyof Mapping) => mapping[field] === "" ? "" : (row[Number(mapping[field])] || "").trim();
-  const mapped = raw.slice(header).map((row, index) => ({ row: header + index + 1, name: mapping.name ? value(row, "name") : [value(row, "first"), value(row, "last")].filter(Boolean).join(" "), email: value(row, "email"), externalId: value(row, "externalId") })).filter((row) => row.name || row.email || row.externalId);
+  const mapped = raw.slice(dataStart).map((row, index) => ({ row: dataStart + index + 1, name: mapping.name ? value(row, "name") : [value(row, "first"), value(row, "last")].filter(Boolean).join(" "), email: value(row, "email"), externalId: value(row, "externalId") })).filter((row) => row.name || row.email || row.externalId);
   const selected = mapped.filter((row) => !excluded.includes(row.row));
   const display = mapped.map((row) => ({ ...row, id: String(row.row), decision: preview?.rows.find((item) => item.row === row.row), excluded: excluded.includes(row.row) })).filter((row) => (row.name + row.email + row.externalId).toLocaleLowerCase("cs").includes(search.toLocaleLowerCase("cs")));
   function invalidate() { setPreview(null); setError(""); setPage(1); }
+  function openMode(next: "single" | "paste" | "file") { setMode(next); setOpen(true); setResult(null); setError(""); setPreview(null); setSheets([]); }
+  function loadPasted() {
+    try {
+      const rows = parseCsv(pasted, pasted.includes("\t") ? "\t" : undefined);
+      if (!rows.some((row) => row.some((cell) => cell.trim()))) throw new Error("Vložte alespoň jeden řádek dat.");
+      setSheets([{ name: "Vložená data", rows }]); setSheet(0); setHeader(1); setMapping(emptyMapping); setExcluded([]); invalidate();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Vložená data nelze načíst."); }
+  }
+  async function addSingle(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const rows = [{ row: 1, name: single.name.trim(), email: single.email.trim().toLowerCase(), externalId: single.externalId.trim().toUpperCase() }];
+      const check = await fetch("/api/classes/" + classId + "/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows, confirmed: false }) });
+      const planned = await check.json(); if (!check.ok) throw new Error(planned.error); const invalid = planned.rows?.find((row: ImportDecision) => row.action === "error"); if (invalid) throw new Error(invalid.message);
+      const save = await fetch("/api/classes/" + classId + "/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows, confirmed: true, expected: planned.expected }) });
+      const data = await save.json(); if (!save.ok) throw new Error(data.error); setResult(data); onImported?.(); router.refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Studenta se nepodařilo přidat."); }
+    finally { setBusy(false); }
+  }
   async function readFile() {
     setBusy(true); setError(""); setPreview(null); setResult(null);
     try {
@@ -62,15 +86,15 @@ export function StudentImport({ classId, className, onImported }: { classId: str
   }
   const actions = preview?.rows.reduce((sum, row) => sum + Number(row.action !== "skip" && row.action !== "error"), 0) || 0;
   return <>
-    <Button variant="outline" onClick={() => setOpen(true)}>Importovat studenty z CSV / Excelu</Button>
+    <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => openMode("single")}>Přidat studenta</Button><Button variant="outline" onClick={() => openMode("paste")}>Vložit z Excelu</Button><Button variant="outline" onClick={() => openMode("file")}>Nahrát CSV / XLSX</Button></div>
     <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next); }}><DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-5xl"><DialogHeader><DialogTitle>Import studentů do třídy {className}</DialogTitle></DialogHeader>
       {result ? <div className="space-y-4"><p role="status">Import dokončen. Nové účty: {result.created}. Existující studenti: {result.added}. Beze změny: {result.skipped}. Doplněná školní ID: {result.filled}.</p>{result.credentials.length > 0 && <><p className="text-sm">Stáhněte a bezpečně předejte přihlašovací údaje nových studentů. Hesla se znovu nezobrazí po opuštění této stránky. Existujícím studentům se heslo nemění.</p><Button onClick={download}>Stáhnout přístupy nových studentů</Button></>}<Button variant="outline" onClick={() => { setResult(null); setSheets([]); setPreview(null); }}>Další import</Button></div> : <fieldset disabled={busy} className="min-w-0 space-y-4">
-        <p className="text-sm text-muted-foreground">1. Nahrajte export. 2. Přiřaďte sloupce. 3. Zkontrolujte náhled a potvrďte import. Účty vyžadují jméno a e-mail; školní ID se použije pro párování odevzdaných souborů.</p>
-        <div className="space-y-2"><Label htmlFor="student-import-file">CSV nebo Excel (.xlsx), do 5 MB</Label><Input id="student-import-file" type="file" ref={fileInput} accept=".csv,.xlsx" onChange={() => { setSheets([]); setPreview(null); }} /></div>
-        <div className="flex flex-wrap items-end gap-3"><div className="space-y-1"><Label htmlFor="csv-encoding">Kódování CSV</Label><select id="csv-encoding" className="h-9 rounded border bg-background px-2" value={encoding} onChange={(event) => { setEncoding(event.target.value); setSheets([]); setPreview(null); }}><option value="utf-8">UTF-8</option><option value="windows-1250">Windows-1250 (čeština)</option></select></div><div className="space-y-1"><Label htmlFor="csv-separator">Oddělovač CSV</Label><select id="csv-separator" className="h-9 rounded border bg-background px-2" value={separator} onChange={(event) => { setSeparator(event.target.value); setSheets([]); setPreview(null); }}><option value="auto">Automaticky</option><option value="semicolon">Středník</option><option value="comma">Čárka</option><option value="tab">Tabulátor</option></select></div><Button onClick={() => void readFile()}>{busy ? "Zpracovávání…" : "Načíst soubor"}</Button></div>
+        {mode === "single" ? <form className="space-y-4" onSubmit={(event) => void addSingle(event)}><p className="text-sm text-muted-foreground">Vytvoří nového studenta nebo přidá existující studentský účet do této třídy.</p><div className="space-y-1"><Label htmlFor="single-name">Jméno a příjmení</Label><Input id="single-name" required maxLength={200} value={single.name} onChange={(event) => setSingle({ ...single, name: event.target.value })} /></div><div className="space-y-1"><Label htmlFor="single-email">E-mail</Label><Input id="single-email" type="email" required value={single.email} onChange={(event) => setSingle({ ...single, email: event.target.value })} /></div><div className="space-y-1"><Label htmlFor="single-id">Školní ID (volitelné)</Label><Input id="single-id" maxLength={100} value={single.externalId} onChange={(event) => setSingle({ ...single, externalId: event.target.value })} /></div><Button type="submit">{busy ? "Přidávání…" : "Přidat do třídy"}</Button></form> : <>
+        <p className="text-sm text-muted-foreground">1. {mode === "paste" ? "Vložte tabulku z Excelu." : "Nahrajte export."} 2. Přiřaďte sloupce. 3. Zkontrolujte náhled a potvrďte import. Účty vyžadují jméno a e-mail; školní ID se použije pro párování odevzdaných souborů.</p>
+        {mode === "paste" ? <div className="space-y-2"><Label htmlFor="student-import-paste">Data z Excelu nebo tabulky</Label><Textarea id="student-import-paste" rows={7} value={pasted} onChange={(event) => { setPasted(event.target.value); setSheets([]); invalidate(); }} placeholder={"Jméno\tE-mail\tŠkolní ID\nJana Nováková\tjana@example.cz\t12345"} /><Button type="button" onClick={loadPasted}>Načíst vložená data</Button></div> : <><div className="space-y-2"><Label htmlFor="student-import-file">CSV nebo Excel (.xlsx), do 5 MB</Label><Input id="student-import-file" type="file" ref={fileInput} accept=".csv,.xlsx" onChange={() => { setSheets([]); setPreview(null); }} /></div><div className="flex flex-wrap items-end gap-3"><div className="space-y-1"><Label htmlFor="csv-encoding">Kódování CSV</Label><select id="csv-encoding" className="h-9 rounded border bg-background px-2" value={encoding} onChange={(event) => { setEncoding(event.target.value); setSheets([]); setPreview(null); }}><option value="utf-8">UTF-8</option><option value="windows-1250">Windows-1250 (čeština)</option></select></div><div className="space-y-1"><Label htmlFor="csv-separator">Oddělovač CSV</Label><select id="csv-separator" className="h-9 rounded border bg-background px-2" value={separator} onChange={(event) => { setSeparator(event.target.value); setSheets([]); setPreview(null); }}><option value="auto">Automaticky</option><option value="semicolon">Středník</option><option value="comma">Čárka</option><option value="tab">Tabulátor</option></select></div><Button onClick={() => void readFile()}>{busy ? "Zpracovávání…" : "Načíst soubor"}</Button></div></>}
         {sheets.length > 0 && <>
-          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><Label htmlFor="import-sheet">List souboru</Label><select id="import-sheet" className="h-9 w-full rounded border bg-background px-2" value={sheet} onChange={(event) => { setSheet(Number(event.target.value)); setMapping(emptyMapping); setExcluded([]); invalidate(); }}>{sheets.map((item, index) => <option key={index} value={index}>{item.name}</option>)}</select></div><div className="space-y-1"><Label htmlFor="import-header">Řádek se záhlavím</Label><Input id="import-header" type="number" min={1} max={raw.length || 1} value={header} onChange={(event) => { setHeader(Math.max(1, Number(event.target.value) || 1)); setExcluded([]); setMapping(emptyMapping); invalidate(); }} /></div></div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{([["name", "Celé jméno"], ["first", "Jméno"], ["last", "Příjmení"], ["email", "E-mail"], ["externalId", "Školní ID"]] as const).map(([key, label]) => <div key={key} className="space-y-1"><Label htmlFor={"map-" + key}>{label}</Label><select id={"map-" + key} className="h-9 w-full rounded border bg-background px-2" value={mapping[key]} onChange={(event) => { setMapping((current) => ({ ...current, [key]: event.target.value, ...(key === "name" && event.target.value ? { first: "", last: "" } : (key === "first" || key === "last") && event.target.value ? { name: "" } : {}) })); invalidate(); }}><option value="">Nepřiřazeno</option>{Array.from({ length: width }, (_, index) => <option key={index} value={String(index)}>{index + 1}. {headers[index] || "Bez názvu"} · např. {(raw[header]?.[index] || "—").slice(0, 50)}</option>)}</select></div>)}</div>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><Label htmlFor="import-sheet">List souboru</Label><select id="import-sheet" className="h-9 w-full rounded border bg-background px-2" value={sheet} onChange={(event) => { setSheet(Number(event.target.value)); setMapping(emptyMapping); setExcluded([]); invalidate(); }}>{sheets.map((item, index) => <option key={index} value={index}>{item.name}</option>)}</select></div><div className="space-y-2"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={hasHeader} onChange={(event) => { setHasHeader(event.target.checked); setMapping(emptyMapping); setExcluded([]); invalidate(); }} />Data obsahují záhlaví</label><div className="space-y-1"><Label htmlFor="import-header">{hasHeader ? "Řádek se záhlavím" : "První řádek dat"}</Label><Input id="import-header" type="number" min={1} max={raw.length || 1} value={header} onChange={(event) => { setHeader(Math.max(1, Number(event.target.value) || 1)); setExcluded([]); setMapping(emptyMapping); invalidate(); }} /></div></div></div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{([["name", "Celé jméno"], ["first", "Jméno"], ["last", "Příjmení"], ["email", "E-mail"], ["externalId", "Školní ID"]] as const).map(([key, label]) => <div key={key} className="space-y-1"><Label htmlFor={"map-" + key}>{label}</Label><select id={"map-" + key} className="h-9 w-full rounded border bg-background px-2" value={mapping[key]} onChange={(event) => { setMapping((current) => ({ ...current, [key]: event.target.value, ...(key === "name" && event.target.value ? { first: "", last: "" } : (key === "first" || key === "last") && event.target.value ? { name: "" } : {}) })); invalidate(); }}><option value="">Nepřiřazeno</option>{Array.from({ length: width }, (_, index) => <option key={index} value={String(index)}>{index + 1}. {(headers[index] || raw[dataStart]?.[index] || "Bez názvu").slice(0, 50)}</option>)}</select></div>)}</div>
           <p className="text-sm">Vybráno {selected.length} z {mapped.length} neprázdných řádků. Maximum 200 studentů na dávku. Existující jména a hesla se nepřepisují; chybějící školní ID lze doplnit.</p>
           <DataTable tableId="student-import-preview" clientPagination data={display} total={display.length} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Vyhledat v importu…" columns={[
             { key: "row", label: "Řádek" }, { key: "name", label: "Jméno" }, { key: "email", label: "E-mail" }, { key: "externalId", label: "Školní ID" },
@@ -79,7 +103,7 @@ export function StudentImport({ classId, className, onImported }: { classId: str
           ]} />
           <div className="flex flex-wrap gap-3"><Button variant="outline" onClick={() => void checkOrImport(false)} disabled={!selected.length || selected.length > 200}>Zkontrolovat import</Button><Button onClick={() => setConfirm(true)} disabled={!preview || preview.rows.some((row) => row.action === "error") || !actions}>Importovat do třídy</Button></div>
           {preview?.rows.some((row) => row.action === "error") && <p role="alert" className="text-sm text-destructive">Opravte přiřazení nebo vynechte chybné řádky a spusťte kontrolu znovu. Zatím nebylo nic zapsáno.</p>}
-        </>}
+        </>}</>}
       </fieldset>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </DialogContent></Dialog>
