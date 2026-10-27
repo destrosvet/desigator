@@ -65,7 +65,7 @@ export default function SubjectsPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classIds: [] as string[] });
+  const [form, setForm] = useState({ name: "", code: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classIds: [] as string[] });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -134,7 +134,7 @@ export default function SubjectsPage() {
         throw new Error(res.status === 403 ? "Vybraná třída už neexistuje nebo k ní nemáte přístup." : "Předmět se nepodařilo vytvořit.");
       }
       setDialogOpen(false);
-      setForm({ name: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classIds: [] as string[] });
+      setForm({ name: "", code: "", description: "", semester: "FULL_YEAR", year: new Date().getFullYear(), classIds: [] as string[] });
       void fetchSubjects();
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Předmět se nepodařilo vytvořit.");
@@ -213,7 +213,8 @@ export default function SubjectsPage() {
               <DialogContent>
                 <DialogHeader><DialogTitle>Nový předmět</DialogTitle></DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-2"><Label>Název</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                  <div className="space-y-2"><Label htmlFor="new-subject-name">Název</Label><Input id="new-subject-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                  <div className="space-y-2"><Label htmlFor="new-subject-code">Kód předmětu</Label><Input id="new-subject-code" value={form.code} maxLength={100} placeholder="např. YPG" onChange={(e) => setForm({ ...form, code: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Popis</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
                   <fieldset className="space-y-2">
                     <legend className="text-sm font-medium">Studijní skupiny</legend>

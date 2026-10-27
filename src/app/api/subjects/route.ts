@@ -10,6 +10,7 @@ import { managedClassScope } from "@/lib/authorization";
 
 const subjectSchema = z.object({
   name: z.string().min(1),
+  code: z.string().trim().max(100).default(""),
   description: z.string().optional(),
   semester: z.enum(["FULL_YEAR", "SUMMER", "WINTER"]).default("FULL_YEAR"),
   year: z.number().min(2000).max(2100).default(new Date().getFullYear()),
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { name, description, semester, year, classIds: requestedClassIds, classId: legacyClassId } = subjectSchema.parse(body);
+    const { name, code, description, semester, year, classIds: requestedClassIds, classId: legacyClassId } = subjectSchema.parse(body);
     const classIds = [...new Set(requestedClassIds?.length ? requestedClassIds : [legacyClassId!])];
     const classes = await db.class.findMany({ where: { id: { in: classIds }, ...managedClassScope(session.user) }, select: { id: true, organizationId: true } });
     if (classes.length !== classIds.length) return NextResponse.json({ error: "Některá vybraná skupina neexistuje nebo k ní nemáte přístup." }, { status: 403 });
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
     const subject = await db.subject.create({
       data: {
         name,
+        code,
         description,
         semester,
         year,

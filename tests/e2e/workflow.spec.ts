@@ -100,3 +100,31 @@ test("teacher creates a task, student submits, assigned evaluator grades; other 
     await evaluatorContext.close();
   }
 });
+
+
+test("teacher enters a subject code when creating a subject and can find it by that code", async ({ page }) => {
+ const name = "E2E subject code " + Date.now();
+ const code = "CODE" + Date.now();
+ await page.goto("/cs/subjects");
+ await page.getByRole("button", { name: "Nový předmět", exact: true }).click();
+ const dialog = page.getByRole("dialog");
+ await dialog.getByLabel("Název", { exact: true }).fill(name);
+ await dialog.getByLabel("Kód předmětu", { exact: true }).fill("  " + code + "  ");
+ await dialog.getByRole("checkbox").first().check();
+ const created = page.waitForResponse(response => response.url().endsWith("/api/subjects") && response.request().method() === "POST");
+ await dialog.getByRole("button", { name: "Vytvořit", exact: true }).click();
+ const response = await created;
+ expect(response.status()).toBe(201);
+ const { subject } = await response.json();
+ try {
+  expect(subject.code).toBe(code);
+  await expect(dialog).toBeHidden();
+  const result = await (await page.request.get("/api/subjects?search=" + encodeURIComponent(code))).json();
+  expect(result.subjects).toHaveLength(1);
+  expect(result.subjects[0]).toMatchObject({ id: subject.id, name, code });
+  await page.getByRole("button", { name: "Nový předmět", exact: true }).click();
+  await expect(page.getByRole("dialog").getByLabel("Kód předmětu", { exact: true })).toHaveValue("");
+ } finally {
+  await page.request.delete("/api/subjects/" + subject.id, { data: { confirmed: true } });
+ }
+});
