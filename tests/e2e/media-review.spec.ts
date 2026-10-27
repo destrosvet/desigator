@@ -186,5 +186,40 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     await expect(reviewer.getByLabel("Technické provedení", { exact: true })).toHaveValue("0");
 
+
+    // Pointer use releases the thumb; plain arrows can immediately switch works again.
+    const composition = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });
+    const sliderTrack = reviewer.locator('[data-slot="slider"]').filter({ has: composition });
+    await sliderTrack.click();
+    await expect(composition).not.toBeFocused();
+    await reviewer.keyboard.press("ArrowLeft");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
+    // Tabbing/focusing still allows normal accessible slider adjustment.
+    await composition.focus();
+    const initialPoints = Number(await reviewer.getByLabel("Kompozice", { exact: true }).inputValue());
+    await composition.press("ArrowLeft");
+    await expect(reviewer.getByLabel("Kompozice", { exact: true })).toHaveValue(String(initialPoints - 1));
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
+    await composition.press("Alt+ArrowRight");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
+    const points = reviewer.getByLabel("Kompozice", { exact: true });
+    await points.fill("2");
+    const shortcutSave = reviewer.waitForResponse(response => response.url().endsWith("/api/evaluations/" + secondId) && response.request().method() === "PATCH");
+    await points.press("Control+s");
+    expect((await shortcutSave).status()).toBe(200);
+    expect((await (await reviewer.request.get("/api/evaluations/" + secondId)).json()).evaluation.totalPoints).toBe(2);
+    await points.press("Alt+ArrowLeft");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
+    await reviewer.getByLabel("Kompozice", { exact: true }).press("Control+Enter");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
+    // The rating controls sit below the preview and stay centered on desktop and mobile.
+    const ratings = reviewer.locator('section[aria-label="Hodnocení práce"]');
+    for (const width of [1440, 390]) {
+      await reviewer.setViewportSize({ width, height: 900 });
+      const box = (await ratings.boundingBox())!;
+      const preview = (await reviewer.getByTestId("work-preview").boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(preview.y + preview.height);
+      expect(Math.abs(box.x + box.width / 2 - preview.x - preview.width / 2)).toBeLessThan(2);
+    }
   } finally { await Promise.all(contexts.map((context) => context.close())); }
 });
