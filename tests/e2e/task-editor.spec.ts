@@ -15,7 +15,7 @@ test("teacher defines ordered criteria in the UI and cannot change graded point 
   await expect(page).toHaveURL(/tasks\/[^/]+$/); const taskId = page.url().split("/").pop()!;
   await page.getByRole("button", { name: "Publikovat", exact: true }).click(); await expect(page.getByText("Před publikováním přidejte alespoň jedno hodnoticí kritérium.", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Upravit zadání", exact: true }).click(); const editor = page.getByRole("form", { name: "Úprava zadání" });
-  await editor.getByLabel("Termín odevzdání", { exact: true }).fill("2026-12-01T14:30");
+  await editor.getByLabel("Datum termínu odevzdání", { exact: true }).fill("2026-12-01");
   await editor.getByLabel("Popis zadání", { exact: true }).fill("Vytvořte sérii ilustrací.");
   await editor.getByRole("button", { name: "Přidat kritérium", exact: true }).click(); await editor.getByLabel("Název kritéria 1", { exact: true }).fill("Kompozice"); await editor.getByLabel("Body kritéria 1", { exact: true }).fill("60");
   await expect(editor.getByRole("button", { name: "Uložit zadání", exact: true })).toBeDisabled();
