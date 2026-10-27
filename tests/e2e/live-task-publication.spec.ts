@@ -10,7 +10,7 @@ test("teacher enables live task results while reviewers keep editing and complet
  if (new URL(url).pathname !== "/desigator_publication_test" && !(process.env.CI && new URL(url).pathname === "/desigator_ci")) throw Error("Isolated publication database required");
  const db = new PrismaClient({ datasourceUrl: url }), password = await bcrypt.hash("Live-results-test-123", 10);
  const school = await db.organization.create({ data: { name: "Live task results " + randomUUID() } });
- const createUser = (name: string, role: "TEACHER" | "STUDENT" | "EVALUATOR", externalId?: string) => db.user.create({ data: { name, role, roles: role === "TEACHER" ? ["TEACHER", "SCHOOL_ADMIN"] : [role], email: randomUUID() + "@example.test", password, externalId, organizationId: school.id } });
+ const createUser = (name: string, role: "TEACHER" | "STUDENT" | "EVALUATOR", externalId?: string) => db.user.create({ data: { name, role, roles: role === "TEACHER" ? ["TEACHER", "SCHOOL_ADMIN", "EVALUATOR"] : [role], email: randomUUID() + "@example.test", password, externalId, organizationId: school.id } });
  const teacherUser = await createUser("Live teacher", "TEACHER"), reviewerUser = await createUser("Live reviewer", "EVALUATOR"), firstStudent = await createUser("First private student", "STUDENT", "LIVE001"), secondStudent = await createUser("Second private student", "STUDENT", "LIVE002");
  const classroom = await db.class.create({ data: { name: "Live class", code: randomUUID(), teacherId: teacherUser.id, organizationId: school.id, publicResultsEnabled: true, students: { create: [firstStudent, secondStudent].map(student => ({ studentId: student.id })) } } });
  const token = randomBytes(32).toString("hex");
