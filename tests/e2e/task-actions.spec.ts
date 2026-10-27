@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { teacherStatePath } from "./auth-setup";
 test.skip(process.env.E2E_MEDIA !== "true", "Requires isolated demo database and storage");
-test("review is the primary header action for teacher and reviewer; import belongs to student work", async ({ browser, baseURL }, testInfo) => {
+test("task header exposes import to teachers and review to assigned reviewers", async ({ browser, baseURL }, testInfo) => {
  const teacherContext = await browser.newContext({ baseURL, storageState: teacherStatePath }); const reviewerContext = await browser.newContext({ baseURL });
  try {
   const teacher = await teacherContext.newPage(); const { subjects } = await (await teacher.request.get("/api/subjects")).json();
@@ -20,7 +20,7 @@ test("review is the primary header action for teacher and reviewer; import belon
   }
   await teacher.goto("/cs/tasks/" + task.id); await headerAction(teacher);
   const workSection = teacher.getByRole("group", { name: "Akce zadání", exact: true });
-  const upload = workSection.getByRole("button", { name: "Hromadně nahrát práce", exact: true }); await expect(upload).toBeVisible(); await expect(upload).not.toHaveClass(/primary-action/);
+  const upload = workSection.getByRole("button", { name: "Hromadně nahrát práce", exact: true }); await expect(upload).toBeVisible(); await expect(upload).toHaveClass(/primary-action/);
   await teacher.screenshot({ path: testInfo.outputPath("teacher-task-actions.png"), fullPage: true });
   await upload.click(); await expect(teacher).toHaveURL(new RegExp("bulk-upload\\?taskId=" + task.id));
   await reviewer.goto("/cs/tasks/" + task.id); await headerAction(reviewer); await expect(reviewer.getByRole("button", { name: "Hromadně nahrát práce", exact: true })).toHaveCount(0);

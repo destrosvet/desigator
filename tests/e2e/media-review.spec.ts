@@ -1,6 +1,8 @@
 import { restoreDemoSession } from "./demo-auth";
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
+import { anonymousAttachmentName } from "../../src/lib/media";
+test.use({ actionTimeout: 15000 });
 
 test.skip(process.env.E2E_MEDIA !== "true", "Requires isolated demo DB and private test MinIO");
 
@@ -42,6 +44,8 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     const submission = savedTask.submissions[0];
     const original = submission.attachments.find((file: { originalName: string }) => file.originalName === "ilustrace.png");
     expect(original).toBeTruthy();
+    const imageLabel = anonymousAttachmentName("ilustrace.png", submission.attachments.findIndex((file: { id: string }) => file.id === original.id));
+    const detailLabel = anonymousAttachmentName("detail.png", submission.attachments.findIndex((file: { originalName: string }) => file.originalName === "detail.png"));
     const previewUrl = `/api/uploads/${original.id}?preview=1`;
     expect((await anonymous.request.get(previewUrl)).status()).toBe(401);
     await login(reviewer, "evaluator@desigator.cz", "evaluator123");
@@ -76,9 +80,11 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     const card = reviewer.locator(`a[href$="/evaluations/${evaluation.id}"]`);
     await expect(card).toBeVisible();
     await expect.poll(() => card.getByRole("img").evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    await expect(card).toHaveAccessibleName(`Hodnotit Anonymní práce 1: ${title}`);
     await card.click();
-    await reviewer.getByRole("button", { name: "Zobrazit ilustrace.png", exact: true }).click();
-    const mainImage = reviewer.getByRole("img", { name: "ilustrace.png", exact: true });
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
+    await reviewer.getByRole("button", { name: `Zobrazit ${imageLabel}`, exact: true }).click();
+    const mainImage = reviewer.getByRole("img", { name: imageLabel, exact: true });
     await expect.poll(() => mainImage.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1200);
     await reviewer.getByRole("button", { name: "Přiblížit obrázek", exact: true }).click();
     await expect(reviewer.getByLabel("Přiblížení", { exact: true })).toHaveText("125 %");
@@ -101,10 +107,10 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await reviewer.getByRole("button", { name: "Obnovit přiblížení", exact: true }).click();
     await expect(reviewer.getByLabel("Přiblížení", { exact: true })).toHaveText("100 %");
     expect(await viewport.evaluate((node) => node.scrollLeft + node.scrollTop)).toBe(0);
-    await reviewer.getByRole("button", { name: "Zobrazit detail.png", exact: true }).click();
-    await expect.poll(() => reviewer.getByRole("img", { name: "detail.png", exact: true }).evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(600);
+    await reviewer.getByRole("button", { name: `Zobrazit ${detailLabel}`, exact: true }).click();
+    await expect.poll(() => reviewer.getByRole("img", { name: detailLabel, exact: true }).evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(600);
     await expect(reviewer.getByLabel("Přiblížení", { exact: true })).toHaveText("100 %");
-    await reviewer.getByRole("button", { name: "Zobrazit ilustrace.png", exact: true }).click();
+    await reviewer.getByRole("button", { name: `Zobrazit ${imageLabel}`, exact: true }).click();
     await reviewer.getByText("Zadání a pokyny", { exact: true }).click();
     await expect(reviewer.getByText("Posuzujte kompozici i technické provedení.", { exact: true })).toBeVisible();
     await reviewer.getByLabel("Kompozice", { exact: true }).fill("50");
@@ -139,7 +145,7 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     const mobile = await contexts[2].newPage();
     await mobile.setViewportSize({ width: 390, height: 844 });
     await mobile.goto(`/cs/evaluations/${evaluation.id}`);
-    await expect.poll(() => mobile.getByRole("img", { name: "ilustrace.png", exact: true }).evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1200);
+    await expect.poll(() => mobile.getByRole("img", { name: imageLabel, exact: true }).evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(1200);
     await expect.poll(() => mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(mobile.getByText("Načítání náhledu…", { exact: true })).toHaveCount(0);
     await mobile.screenshot({ path: testInfo.outputPath("review-mobile.png"), fullPage: true });
@@ -151,17 +157,17 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     const secondId = (await secondAssigned.json()).evaluation.id;
     await reviewer.goto("/cs/evaluations");
     await expect(reviewer.getByRole("heading", { name: "Předměty k hodnocení" })).toBeVisible();
-    await expect(reviewer.getByRole("link", { name: /^Hodnotit:/ })).toHaveCount(0);
+    await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(0);
     await reviewer.getByRole("link").filter({ has: reviewer.getByRole("heading", { name: subject.name, exact: true }) }).click();
-    await expect(reviewer.getByRole("link", { name: /^Hodnotit:/ })).toHaveCount(0);
+    await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(0);
     await reviewer.getByRole("link").filter({ has: reviewer.getByRole("heading", { name: title, exact: true }) }).click();
-    await expect(reviewer.getByRole("link", { name: /^Hodnotit:/ })).toHaveCount(2);
+    await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(2);
     await reviewer.locator(`a[href$="/evaluations/${evaluation.id}"]`).click();
     await reviewer.getByRole("button", { name: "Další student", exact: true }).click();
-    await expect(reviewer.getByTestId("current-student")).toHaveText("Student 2");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     const slider = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });
     await slider.focus(); await slider.press("ArrowRight");
-    await expect(reviewer.getByTestId("current-student")).toHaveText("Student 2");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     await expect(reviewer.getByLabel("Kompozice", { exact: true })).toHaveValue("1");
     await reviewer.getByLabel("Technické provedení", { exact: true }).fill("0");
     await reviewer.route(`**/api/evaluations/${secondId}`, async (route) => {
@@ -169,15 +175,15 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     });
     await reviewer.getByRole("button", { name: "Předchozí student", exact: true }).click();
     await expect(reviewer.getByRole("alert").filter({ hasText: "Test výpadku ukládání" })).toContainText("Test výpadku ukládání");
-    await expect(reviewer.getByTestId("current-student")).toHaveText("Student 2");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     await reviewer.unroute(`**/api/evaluations/${secondId}`);
     await reviewer.getByRole("button", { name: "Předchozí student", exact: true }).click();
-    await expect(reviewer.getByTestId("current-student")).toHaveText("Student 1");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
     const secondResult = (await (await reviewer.request.get(`/api/evaluations/${secondId}`)).json()).evaluation;
     expect(secondResult.status).toBe("COMPLETED"); expect(secondResult.totalPoints).toBe(1);
     await reviewer.getByRole("button", { name: "Další student", exact: true }).focus();
     await reviewer.keyboard.press("ArrowRight");
-    await expect(reviewer.getByTestId("current-student")).toHaveText("Student 2");
+    await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     await expect(reviewer.getByLabel("Technické provedení", { exact: true })).toHaveValue("0");
 
   } finally { await Promise.all(contexts.map((context) => context.close())); }
