@@ -1,4 +1,5 @@
 import { restoreDemoSession } from "./demo-auth";
+import { teacherStatePath } from "./auth-setup";
 import { expect, test, type Page } from "@playwright/test";
 test.skip(process.env.E2E_WORKFLOW !== "true", "Requires isolated seeded database");
 async function login(page: Page, email: string, password: string) {
@@ -43,4 +44,25 @@ test("teacher defines ordered criteria in the UI and cannot change graded point 
   await editor.getByLabel("Pokyny k práci", { exact: true }).fill("Doplňující organizační pokyny."); await editor.getByRole("button", { name: "Uložit zadání", exact: true }).click(); await expect(editor).toBeHidden();
   const result = (await (await page.request.get("/api/evaluations/" + evaluation.id)).json()).evaluation; expect(result.totalPoints).toBe(90); expect(result.status).toBe("COMPLETED");
  } finally { await context.close(); await studentContext.close(); }
+});
+
+
+test("publishing an assignment without criteria creates the default full-point criterion", async ({ browser, baseURL }) => {
+ const context = await browser.newContext({ baseURL, storageState: teacherStatePath });
+ let taskId: string | undefined;
+ try {
+  const { subjects } = await (await context.request.get("/api/subjects")).json();
+  const created = await context.request.post("/api/tasks", { data: { title: "E2E default criterion " + Date.now(), subjectId: subjects[0].id, maxPoints: 100 } });
+  expect(created.status()).toBe(201);
+  taskId = (await created.json()).task.id;
+  const published = await context.request.patch("/api/tasks/" + taskId, { data: { status: "PUBLISHED" } });
+  expect(published.status()).toBe(200);
+  const { task } = await published.json();
+  expect(task.status).toBe("PUBLISHED");
+  expect(task.criteria).toHaveLength(1);
+  expect(task.criteria[0]).toMatchObject({ name: "Celkové hodnocení", maxPoints: 100 });
+ } finally {
+  if (taskId) await context.request.delete("/api/tasks/" + taskId);
+  await context.close();
+ }
 });
