@@ -1,7 +1,7 @@
 import {adjustedTotal} from "@/lib/result-adjustments";
 import {parseGradingScale} from "@/lib/grading-scale";
 import { db } from "@/lib/db";
-import { finalGrade, publishedAverage, visibleResultReviews } from "@/lib/public-results-grade";
+import { finalGrade, publishedAverage } from "@/lib/public-results-grade";
 export const publicImageTypes = ["image/jpeg","image/png","image/webp","image/gif"];
 // Shared classes are deliberately never enumerated anonymously.
 export async function publicClasses() { return []; }
@@ -21,7 +21,7 @@ export async function publicResults(shareToken: string, subjectId?: string) {
  const gradingScale=parseGradingScale(classroom.organization?.gradingScale);
  const maximum=tasks.reduce((sum,t)=>sum+t.maxPoints,0);
  const rows=members.filter(m=>m.student.externalId?.trim()).map(({student})=>{
- const cells=tasks.map(task=>{const work=task.submissions.find(s=>s.studentId===student.id);const reviews=work ? visibleResultReviews(work.evaluations,Boolean(task.resultsPublishedAt)) : [];const points=publishedAverage(reviews,task.maxPoints);const comments=points===null?[]:reviews.flatMap(review=>[...(review.feedback?.trim()?[{text:review.feedback.trim(),criterion:null as string|null}]:[]),...(review.scores??[]).filter(score=>score.comment?.trim()).map(score=>({text:score.comment!.trim(),criterion:score.criterion.name}))]);return {pending:Boolean(task.resultsPublishedAt&&work?.evaluations.some(review=>review.status!=="COMPLETED")),comments,points:points===null?null:Math.round(points*100)/100,raw:points,images:points===null?[]:work!.attachments.map(a=>({id:a.id,url:"/api/public/results/"+shareToken+"/preview/"+a.id}))};});
+ const cells=tasks.map(task=>{const work=task.submissions.find(s=>s.studentId===student.id);const reviews=work ? work.evaluations.filter(review=>!task.resultsPublishedAt||review.status==="COMPLETED") : [];const points=publishedAverage(reviews,task.maxPoints);const comments=points===null?[]:reviews.flatMap(review=>[...(review.feedback?.trim()?[{text:review.feedback.trim(),criterion:null as string|null}]:[]),...(review.scores??[]).filter(score=>score.comment?.trim()).map(score=>({text:score.comment!.trim(),criterion:score.criterion.name}))]);return {pending:Boolean(task.resultsPublishedAt&&work?.evaluations.some(review=>review.status!=="COMPLETED")),comments,points:points===null?null:Math.round(points*100)/100,raw:points,images:points===null?[]:work!.attachments.map(a=>({id:a.id,url:"/api/public/results/"+shareToken+"/preview/"+a.id}))};});
  const base=Math.round(cells.reduce((sum,c)=>sum+(c.raw??0),0)*100)/100;
  const ownAdjustments=adjustments.filter(a=>a.studentId===student.id);const total=adjustedTotal(base,ownAdjustments);
  return {studentId:student.externalId!,cells:cells.map(({points,images,comments})=>({points,images,comments})),total,grade:finalGrade(total,maximum,gradingScale),provisional:cells.some(c=>c.points===null||c.pending)};
