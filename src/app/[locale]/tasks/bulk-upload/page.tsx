@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,9 @@ export default function BulkUploadPage() {
 function BulkUploadForm() {
   const { data: session } = useSession();
   const params = useSearchParams();
+  const routeParams = useParams<{ locale: string }>();
+  const router = useRouter();
+  const targetStudentId = params.get("studentId") || "";
   const [taskId, setTaskId] = useState(params.get("taskId") || "");
   const [tasks, setTasks] = useState<Array<{ id: string; title: string }>>([]);
   const [roster, setRoster] = useState<Roster | null>(null);
@@ -34,6 +37,7 @@ function BulkUploadForm() {
   const [changeNote, setChangeNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [progress, setProgress] = useState<{ percent: number; sent: number; total: number; processing: boolean } | null>(null);
+  const [uploadComplete, setUploadComplete] = useState(false);
   const canUpload = ["ADMIN", "TEACHER"].includes(session?.user?.role || "");
   useEffect(() => {
     if (!canUpload) return;
@@ -61,6 +65,7 @@ function BulkUploadForm() {
     return () => { active = false; };
   }, [taskId, canUpload]);
   const selected = rows.filter((row) => !row.excluded);
+  const targetStudent = roster?.students.find((student) => student.id === targetStudentId);
   const invalid = selected.some((row) => !/[.](jpe?g|png|webp|gif|pdf|zip|mp4|webm|glb)$/i.test(row.file.name) || !row.studentId);
   const duplicates = new Set(selected.map((row) => JSON.stringify([row.studentId, row.file.name, row.file.size]))).size !== selected.length;
   const overLimit = selected.length > 100 || selected.some((row) => row.file.size > uploadFileSizeLimit(row.file.type)) || selected.reduce((sum, row) => sum + row.file.size, 0) > 100 * 1024 * 1024;
@@ -91,7 +96,7 @@ function BulkUploadForm() {
       });
       setMessage((result.replayed ? "Tato dávka již byla importována. Další verze nevznikly. Evidováno " : "Uloženo ") + result.summary.success + " souborů pro " + new Set(selected.map((row) => row.studentId)).size + " žáků.");
       setRoster((current) => current ? { ...current, students: current.students.map((student) => selected.some((row) => row.studentId === student.id) ? { ...student, hasSubmission: true } : student) } : null);
-      setRows([]); setConfirmed(false);
+      setRows([]); setConfirmed(false); setUploadComplete(true);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Import selhal."); }
     finally { setBusy(false); setProgress(null); }
   }
@@ -99,13 +104,13 @@ function BulkUploadForm() {
     <fieldset disabled={busy} className="space-y-4 rounded-xl border p-4">
       <div className="space-y-1"><Label htmlFor="import-task">Zadání</Label><select id="import-task" value={taskId} className="h-10 w-full rounded border bg-background px-2" onChange={(event) => { setTaskId(event.target.value); setRoster(null); setRows([]); setConfirmed(false); setMessage(""); setLoading(Boolean(event.target.value)); }}><option value="">Vyberte zadání</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></div>
       {loading ? <p>Načítání žáků…</p> : null}
-      {roster ? <><p>{roster.subject} · {roster.className} · akademický rok {roster.year} · {roster.students.length} žáků</p><div className="space-y-1"><Label htmlFor="import-stage">Stav nové verze</Label><select id="import-stage" value={stage} onChange={(event) => { setStage(event.target.value); setConfirmed(false); }} className="h-10 w-full rounded border bg-background px-2"><option value="WIP">Rozpracováno (WIP)</option><option value="FINAL">Finální</option></select></div><Label htmlFor="import-note">Popis nové verze (volitelný)</Label><Input id="import-note" value={changeNote} maxLength={2000} onChange={(event) => { setChangeNote(event.target.value); setConfirmed(false); }} /><Label htmlFor="import-files">Soubory (max. 100, MP4 do 100 MB, ostatní do 25 MB, dávka celkem 100 MB)</Label><Input id="import-files" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.zip,.mp4,.webm,.glb" onChange={(event) => { setRows(Array.from(event.target.files || []).map((file) => ({ file, studentId: suggestStudent(file.name, roster.students), excluded: false }))); setConfirmed(false); setMessage(""); event.target.value = ""; }} /></> : null}
+      {roster ? <><p>{roster.subject} · {roster.className} · akademický rok {roster.year} · {roster.students.length} žáků</p>{targetStudent ? <div className="rounded-lg border border-primary/40 bg-primary/5 p-4"><p className="text-sm text-muted-foreground">Nahráváte práci za studenta</p><p className="text-lg font-semibold">{targetStudent.name}</p><p className="text-sm">Školní ID: <strong>{targetStudent.externalId || "není evidováno"}</strong></p></div> : null}<div className="space-y-1"><Label htmlFor="import-stage">Stav nové verze</Label><select id="import-stage" value={stage} onChange={(event) => { setStage(event.target.value); setConfirmed(false); }} className="h-10 w-full rounded border bg-background px-2"><option value="WIP">Rozpracováno (WIP)</option><option value="FINAL">Finální</option></select></div><Label htmlFor="import-note">Popis nové verze (volitelný)</Label><Input id="import-note" value={changeNote} maxLength={2000} onChange={(event) => { setChangeNote(event.target.value); setConfirmed(false); }} /><Label htmlFor="import-files">Soubory (max. 100, MP4 do 100 MB, ostatní do 25 MB, dávka celkem 100 MB)</Label><Input id="import-files" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.zip,.mp4,.webm,.glb" onChange={(event) => { setRows(Array.from(event.target.files || []).map((file) => ({ file, studentId: targetStudent?.id || suggestStudent(file.name, roster.students), excluded: false }))); setConfirmed(false); setUploadComplete(false); setMessage(""); event.target.value = ""; }} /></> : null}
       {rows.length ? <><div className="space-y-1"><Label htmlFor="student-search">Hledat žáka ve výběrech</Label><Input id="student-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Jméno nebo školní ID" /></div><div className="space-y-3">{rows.map((row, index) => {
         const student = roster?.students.find((item) => item.id === row.studentId);
         const options = roster?.students.filter((item) => item.id === row.studentId || (item.name + " " + item.externalId).toLocaleLowerCase().includes(search.toLocaleLowerCase())) || [];
         return <div key={index} className="flex flex-wrap items-center gap-3 rounded-lg border p-3"><LocalPreview file={row.file} /><div className="min-w-40 flex-1"><p className="break-all font-medium">{row.file.name}</p><p className="text-xs text-muted-foreground">ID z názvu: {extractStudentId(row.file.name) || "nerozpoznáno"} · {Math.ceil(row.file.size / 1024)} KB</p>{!row.excluded && !row.studentId ? <p className="text-sm text-destructive">Vyberte žáka nebo soubor vyřaďte.</p> : null}{student?.hasSubmission ? <p className="text-sm text-destructive">Žák již má práci. Vznikne nová verze, předchozí soubory a hodnocení zůstanou zachované.</p> : null}{!/[.](jpe?g|png|webp|gif|pdf|zip|mp4|webm|glb)$/i.test(row.file.name) ? <p className="text-sm text-destructive">Opravte příponu souboru před importem.</p> : null}</div><div className="min-w-52 flex-1"><Label htmlFor={"author-" + index}>Autor souboru {index + 1}</Label><select id={"author-" + index} disabled={row.excluded} value={row.studentId} onChange={(event) => update(index, { studentId: event.target.value })} className="h-10 w-full rounded border bg-background px-2"><option value="">Vyberte žáka</option>{options.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.externalId || "bez ID"}{item.hasSubmission ? " · nová verze" : ""}</option>)}</select></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={row.excluded} onChange={(event) => update(index, { excluded: event.target.checked })} />Vyřadit</label></div>;
       })}</div><p>{selected.length} souborů · {new Set(selected.map((row) => row.studentId).filter(Boolean)).size} žáků · {rows.length - selected.length} vyřazeno</p>{duplicates ? <p role="alert">Dávka obsahuje duplicitní soubory. Vyřaďte je.</p> : null}{overLimit ? <p role="alert">Dávka překračuje limity uploadu.</p> : null}<label className="flex items-center gap-2"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={invalid || duplicates || overLimit || !selected.length} />Zkontroloval/a jsem autory všech vybraných souborů.</label><div className="flex flex-wrap gap-3"><Button onClick={() => void upload()} disabled={!confirmed || invalid || duplicates || overLimit || !selected.length}>{busy ? "Nahrávání…" : "Potvrdit párování a nahrát"}</Button><Button variant="outline" onClick={() => { setRows([]); setConfirmed(false); setMessage(""); }}>Zrušit výběr</Button></div></> : null}
-    </fieldset>{progress ? <div className="space-y-2 rounded-xl border p-4" role="status" aria-live="polite"><div className="flex items-center justify-between gap-3 text-sm"><span>{progress.processing ? "Soubory jsou nahrané, ukládám práce…" : "Nahrávání souborů…"}</span><strong>{progress.percent} %</strong></div><Progress value={progress.percent} aria-label="Průběh hromadného nahrávání" /><p className="text-xs text-muted-foreground">{formatBytes(progress.sent)} z {formatBytes(progress.total)}</p></div> : null}</>}{message ? <p role="status" className="rounded border p-3">{message}</p> : null}</div></AppShell>;
+    </fieldset>{progress ? <div className="space-y-2 rounded-xl border p-4" role="status" aria-live="polite"><div className="flex items-center justify-between gap-3 text-sm"><span>{progress.processing ? "Soubory jsou nahrané, ukládám práce…" : "Nahrávání souborů…"}</span><strong>{progress.percent} %</strong></div><Progress value={progress.percent} aria-label="Průběh hromadného nahrávání" /><p className="text-xs text-muted-foreground">{formatBytes(progress.sent)} z {formatBytes(progress.total)}</p></div> : null}</>}{message ? <p role="status" className="rounded border p-3">{message}</p> : null}{uploadComplete && taskId ? <Button onClick={() => router.push("/" + routeParams.locale + "/tasks/" + taskId)}>Zpět do zadání a seznamu studentů</Button> : null}</div></AppShell>;
 }
 
 function formatBytes(bytes: number) {
