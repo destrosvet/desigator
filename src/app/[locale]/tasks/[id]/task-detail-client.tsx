@@ -19,9 +19,10 @@ export function TaskDetailClient({ task, students, role, userId, locale, canMana
  const router = useRouter(); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [messageError, setMessageError] = useState(false); const [currentStatus, setCurrentStatus] = useState(task.status);
  const [search, setSearch] = useState(""); const [page, setPage] = useState(1); const [limit, setLimit] = useState(20); const [submissionFilter, setSubmissionFilter] = useState<"all" | "missing">("all");
  const rows = studentWorkRows(students, task.submissions);
+ const isPublished = (work: WorkVersion | null) => Boolean(work && (work.resultsPublishedAt || (task.resultsPublishedAt && work.evaluations.some(review => review.status === "COMPLETED"))));
  const submitted = rows.filter((row) => row.latest).length;
  const filtered = rows.filter((row) => submissionFilter === "all" || !row.latest).filter((row) => (row.name + " " + row.email).toLocaleLowerCase(locale).includes(search.toLocaleLowerCase(locale)));
- const reviewDisabled = busy || (canManage ? !rows.some((row) => row.latest?.stage === "FINAL" && !row.latest.resultsPublishedAt) : !task.submissions.some((work) => work.evaluations.length));
+ const reviewDisabled = busy || (canManage ? !rows.some((row) => row.latest?.stage === "FINAL" && (!row.latest.resultsPublishedAt || task.resultsPublishedAt)) : !task.submissions.some((work) => work.evaluations.length));
  const ownHref = "/" + locale + "/tasks/" + task.id + "/students/" + userId;
  async function updateStatus(status: string) {
   setBusy(true); setMessage(""); setMessageError(false);
@@ -55,7 +56,7 @@ export function TaskDetailClient({ task, students, role, userId, locale, canMana
    { key: "submittedAt", label: "Odevzdáno", sortValue: (row) => row.latest ? new Date(row.latest.submittedAt).getTime() : null, render: (row) => row.latest ? new Date(row.latest.submittedAt).toLocaleString(locale) : "—" },
    { key: "versionCount", label: "Počet verzí" },
    { key: "review", label: "Hodnocení poslední verze", sortValue: (row) => !row.latest ? null : row.latest.stage === "WIP" ? "Průběžná práce" : !row.latest.evaluations.length ? "Nepřiřazeno" : row.latest.evaluations.every((review: { status: string }) => review.status === "COMPLETED") ? "Dokončeno" : "Probíhá", render: (row) => !row.latest ? "—" : row.latest.stage === "WIP" ? "Průběžná práce" : !row.latest.evaluations.length ? "Nepřiřazeno" : row.latest.evaluations.every((review: { status: string }) => review.status === "COMPLETED") ? "Dokončeno" : "Probíhá" },
-   { key: "publication", label: publication("title"), sortValue: (row) => row.latest?.resultsPublishedAt || "", render: (row) => row.latest?.stage === "FINAL" ? <Badge variant={row.latest.resultsPublishedAt ? "default" : "secondary"}>{publication(row.latest.resultsPublishedAt ? "published" : "private")}</Badge> : "—" },
+   { key: "publication", label: publication("title"), sortValue: (row) => isPublished(row.latest) ? "published" : "", render: (row) => row.latest?.stage === "FINAL" ? <Badge variant={isPublished(row.latest) ? "default" : "secondary"}>{publication(isPublished(row.latest) ? "published" : "private")}</Badge> : "—" },
   ]} total={filtered.length} page={page} limit={limit} onSearch={setSearch} onPageChange={setPage} onLimitChange={setLimit} onRowClick={(row) => router.push("/" + locale + "/tasks/" + task.id + "/students/" + row.id)} searchPlaceholder="Vyhledat studenta v zadání…" /></CardContent></Card>}
  </div></AppShell>;
 }

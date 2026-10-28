@@ -64,6 +64,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   consultationComments ConsultationComment[]
   publishedResults Submission[] @relation("ResultsPublisher")
+  publishedTaskResults Task[] @relation("TaskResultsPublisher")
   password   String   // hashované via bcrypt
   name       String
   role       UserRole @default(STUDENT) // kompatibilní hlavní role; oprávnění jsou v roles
@@ -236,6 +237,9 @@ model SubjectClass {
   @@map("subject_classes")
 }
 model Task {
+  resultsPublishedAt DateTime?
+  resultsPublishedById String?
+  resultsPublishedBy User? @relation("TaskResultsPublisher", fields: [resultsPublishedById], references: [id], onDelete: SetNull)
   id          String     @id @default(cuid())
   legacyId    Int?       // staré MySQL task_id pro migraci
   title       String

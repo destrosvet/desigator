@@ -7,6 +7,7 @@ export type WorkVersion = {
   evaluations: Array<{ id: string; status: string; totalPoints: number | null; feedback?: string | null; evaluator: { name: string } }>;
 };
 export type TaskContext = {
+ resultsPublishedAt?: string | null;
  id: string; title: string; description: string | null; instructions: string | null; maxPoints: number;
  deadline: string | null; status: string; subject: { name: string; class: { name: string } };
  criteria: Array<{ id: string; name: string; description: string | null; maxPoints: number }>;

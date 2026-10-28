@@ -1,6 +1,7 @@
 "use client";
 import {gradeLabels} from "@/lib/grading-scale";
 import {useState} from "react";
+import {useLiveResultsRefresh} from "@/hooks/use-live-results-refresh";
 import {useTranslations} from "next-intl";
 import {Search,ImageIcon,MessageSquare,ArrowUpRight,Info} from "lucide-react";
 import {Tooltip,TooltipTrigger,TooltipContent} from "@/components/ui/tooltip";
@@ -25,6 +26,7 @@ function gradeStyle(grade:string|null,labels:string[]){
  return ["bg-emerald-50 text-emerald-700 ring-emerald-600/10 dark:bg-emerald-950/40 dark:text-emerald-300","bg-teal-50 text-teal-700 ring-teal-600/10 dark:bg-teal-950/40 dark:text-teal-300","bg-sky-50 text-sky-700 ring-sky-600/10 dark:bg-sky-950/40 dark:text-sky-300","bg-amber-50 text-amber-700 ring-amber-600/10 dark:bg-amber-950/40 dark:text-amber-300","bg-orange-50 text-orange-700 ring-orange-600/10 dark:bg-orange-950/40 dark:text-orange-300"][labels.indexOf(grade)]??"bg-muted text-muted-foreground";
 }
 export function PublicResultsTable({data}:{data:Results}){
+ useLiveResultsRefresh();
  const t=useTranslations("publicResults"),[search,setSearch]=useState("");const rows=data.rows.filter(row=>row.studentId.toLocaleLowerCase().includes(search.toLocaleLowerCase()));const labels=gradeLabels(data.gradingScale);
  return <div className="space-y-5">
   <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_4px_24px_-16px_rgba(0,0,0,0.15)]">

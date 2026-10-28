@@ -10,3 +10,8 @@ export function publishedAverage(reviews:{status:string;totalPoints:number|null}
  if(!reviews.length||reviews.some(r=>r.status!=="COMPLETED"||r.totalPoints===null||!Number.isInteger(r.totalPoints)||r.totalPoints<0||r.totalPoints>maximum))return null;
  return reviews.reduce((sum,r)=>sum+r.totalPoints!,0)/reviews.length;
 }
+
+// Live tasks expose only completed reviews; drafts and their comments stay private.
+export function visibleResultReviews<T extends { status: string }>(reviews: T[], live: boolean): T[] {
+ return live ? reviews.filter(review => review.status === "COMPLETED") : reviews;
+}

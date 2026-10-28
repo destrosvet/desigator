@@ -1,5 +1,6 @@
 "use client";
 import {useState} from "react";
+import {useLiveResultsRefresh} from "@/hooks/use-live-results-refresh";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
 import {useTranslations} from "next-intl";
@@ -14,6 +15,7 @@ import type {subjectResults} from "@/lib/subject-results";
 type Results=NonNullable<Awaited<ReturnType<typeof subjectResults>>>;
 type Row=Results["rows"][number];
 export function SubjectResultsClient({data,locale}:{data:Results;locale:string}){
+ useLiveResultsRefresh(data.mode === "student");
  const t=useTranslations("teacherResults"),router=useRouter(),teacher=data.mode==="teacher";
  const [search,setSearch]=useState(""),[selected,setSelected]=useState<Row|null>(null),[history,setHistory]=useState<Row|null>(null),[points,setPoints]=useState("0,20"),[reason,setReason]=useState(""),[visible,setVisible]=useState(false),[requestId,setRequestId]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const format=(n:number)=>n.toLocaleString(locale,{minimumFractionDigits:2,maximumFractionDigits:2});

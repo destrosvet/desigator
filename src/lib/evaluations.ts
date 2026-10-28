@@ -12,7 +12,7 @@ export function evaluationScope(user: AuthUser): Prisma.EvaluationWhereInput {
  const scopes: Prisma.EvaluationWhereInput[] = [{ submission: { task: managedTaskScope(user) } }];
  if (canEvaluate(user)) scopes.push({ evaluatorId: user.id });
  if (hasRole(user, "STUDENT")) scopes.push({ status: "COMPLETED", submission: {
-  studentId: user.id, stage: "FINAL", resultsPublishedAt: { not: null },
+  studentId: user.id, stage: "FINAL", OR: [{ resultsPublishedAt: { not: null } }, { task: { resultsPublishedAt: { not: null } } }],
   task: { status: { in: ["PUBLISHED", "CLOSED"] }, subject: { classes: { some: { class: { organizationId: user.organizationId || "__no_organization__", students: { some: { studentId: user.id } } } } } } },
  } });
  return { OR: scopes };
