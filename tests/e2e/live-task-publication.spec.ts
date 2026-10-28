@@ -34,12 +34,15 @@ test("teacher enables live task results while reviewers keep editing and complet
   const read = async () => (await ac.request.get(publicEndpoint)).json();
   expect((await read()).rows.every((row: { cells: { points: number | null }[] }) => row.cells[0].points === null)).toBe(true);
   expect((await student.request.get("/api/evaluations/" + firstReview.id)).status()).toBe(404);
+  const publicPage = await ac.newPage(); await publicPage.clock.install(); await publicPage.goto("/cs/results/" + token);
   await teacher.goto("/cs/evaluations?taskId=" + task.id + "&status=COMPLETED");
   const panel = teacher.locator('section[aria-label="Zveřejnění výsledků celého zadání"]');
   await expect(panel.getByTestId("task-publication-progress")).toContainText("1 z 2");
   await panel.getByRole("button", { name: "Zapnout průběžné zveřejňování", exact: true }).click();
   await teacher.getByRole("alertdialog").getByRole("button", { name: "Zapnout zveřejňování", exact: true }).click();
   await expect(panel.getByText("Průběžně zveřejňováno", { exact: true })).toBeVisible();
+  await publicPage.bringToFront(); await publicPage.clock.runFor(30000);
+  await expect(publicPage.getByRole("button", { name: /LIVE001.*Live task.*80/ })).toBeVisible();
   let data = await read();
   expect(data.rows.find((row: { studentId: string }) => row.studentId === "LIVE001").cells[0].points).toBe(80);
   expect(data.rows.find((row: { studentId: string }) => row.studentId === "LIVE002").cells[0].points).toBeNull();
@@ -57,6 +60,8 @@ test("teacher enables live task results while reviewers keep editing and complet
   const saved = reviewer.waitForResponse(response => response.url().endsWith("/api/evaluations/" + firstReview.id) && response.request().method() === "PATCH");
   await reviewer.getByLabel("Provedení", { exact: true }).press("Control+s"); expect((await saved).status()).toBe(200);
   expect((await read()).rows.find((row: { studentId: string }) => row.studentId === "LIVE001").cells[0].points).toBe(90);
+  await publicPage.bringToFront(); await publicPage.clock.runFor(30000);
+  await expect(publicPage.getByRole("button", { name: /LIVE001.*Live task.*90/ })).toBeVisible();
   expect((await reviewer.request.patch("/api/evaluations/" + secondReview.id, { data: { status: "COMPLETED", feedback: "Second visible feedback", scores: scores(70) } })).status()).toBe(200);
   expect((await read()).rows.find((row: { studentId: string }) => row.studentId === "LIVE002").cells[0].points).toBe(70);
   expect((await teacher.request.patch("/api/evaluations/" + waitingReview.id, { data: { status: "COMPLETED", feedback: "Teacher visible feedback", scores: scores(50) } })).status()).toBe(200);
@@ -73,6 +78,8 @@ test("teacher enables live task results while reviewers keep editing and complet
   await panel.getByRole("button", { name: "Vypnout zveřejňování výsledků", exact: true }).click();
   await teacher.getByRole("alertdialog").getByRole("button", { name: "Vypnout zveřejňování", exact: true }).click();
   await expect(panel.getByText("Nezveřejněno", { exact: true })).toBeVisible();
+  await publicPage.bringToFront(); await publicPage.clock.runFor(30000);
+  await expect(publicPage.getByRole("button", { name: /LIVE001.*Live task/ })).toHaveCount(0);
   expect((await read()).rows.every((row: { cells: { points: number | null }[] }) => row.cells[0].points === null)).toBe(true);
   expect((await student.request.get("/api/evaluations/" + firstReview.id)).status()).toBe(404);
   expect((await db.evaluation.findUniqueOrThrow({ where: { id: firstReview.id } })).totalPoints).toBe(90);
