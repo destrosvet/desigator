@@ -26,6 +26,7 @@ jobs:
       PORT: 3100
       HOSTNAME: 127.0.0.1
       E2E_ORGANIZATIONS: 'true'
+      E2E_ORGANIZATIONS_DATABASE_URL: postgresql://postgres:desigator_ci@localhost:5432/desigator_ci
       E2E_PLATFORM_ROLES: 'true'
       E2E_PLATFORM_DATABASE_URL: postgresql://postgres:desigator_ci@localhost:5432/desigator_ci
       E2E_STATISTICS: 'true'

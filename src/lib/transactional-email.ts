@@ -1,5 +1,15 @@
 import { createHash } from "crypto";
 type MailLocale = "cs" | "en";
+export async function sendVerificationEmail(email: string, token: string, locale: MailLocale) {
+  const { apiKey, from, origin } = mailConfiguration();
+  const link = `${origin}/${locale}/auth/verify-email#token=${token}`;
+  const en = locale === "en";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST", headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json", "Idempotency-Key": "verify-email/" + createHash("sha256").update(token).digest("hex") },
+    body: JSON.stringify({ from, to: [email], subject: en ? "Desigator: confirm your email" : "Desigator: potvrďte svůj e-mail", text: (en ? "Confirm your email to activate your Desigator account. The link expires in 24 hours:\n\n" : "Pro aktivaci účtu Desigator potvrďte svůj e-mail. Odkaz platí 24 hodin:\n\n") + link + (en ? "\n\nIf you did not register, ignore this email." : "\n\nPokud jste se neregistrovali, tento e-mail ignorujte.") }), signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok || typeof (await response.json()).id !== "string") throw new Error("Verification email delivery failed");
+}
 export function mailConfiguration() {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;

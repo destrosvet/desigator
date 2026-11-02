@@ -42,7 +42,8 @@
     "ADMIN": "Administrátor",
     "TEACHER": "Učitel",
     "EVALUATOR": "Hodnotitel",
-    "STUDENT": "Student"
+    "STUDENT": "Student",
+    "USER": "Uživatel"
   },
   "common": {
     "save": "Uložit",

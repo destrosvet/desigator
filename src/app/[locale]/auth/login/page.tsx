@@ -90,6 +90,7 @@ export default function LoginPage() {
               {t("submit")}
             </Button>
           </form>
+          <p className="mt-4 text-center text-sm"><Link href="/auth/verify-email" className="text-primary hover:underline">{locale === "en" ? "Verify your email / resend link" : "Ověřit e-mail / poslat nový odkaz"}</Link></p>
           <p className="mt-4 text-center text-sm"><Link href="/auth/forgot-password" className="text-primary hover:underline">{passwords("forgotLink")}</Link></p>
           <p className="text-center text-sm text-muted-foreground mt-4">
             {t("noAccount")}{" "}

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ session: vi.fn(), organization: vi.fn(), members: vi.fn(), rename: vi.fn() }));
+const m = vi.hoisted(() => ({ session: vi.fn(), organization: vi.fn(), members: vi.fn(), count: vi.fn(), rename: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: m.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("@/lib/db", () => ({ db: { organization: { findUnique: m.organization, update: m.rename }, user: { findMany: m.members } } }));
+vi.mock("@/lib/db", () => ({ db: { organization: { findUnique: m.organization, update: m.rename }, user: { findMany: m.members, count: m.count } } }));
 import { GET, PATCH } from "@/app/api/organization/route";
 import { organizationTarget, canManageOrganization } from "@/lib/organization-access";
 const admin = { id: "admin", role: "ADMIN", roles: ["ADMIN"], organizationId: null };
@@ -18,6 +18,11 @@ describe("platform vs school context", () => {
    const response = await GET(request("school-b")); expect(response.status).toBe(200);
    expect(await response.json()).toMatchObject({ organization: { id: "school-b" }, canManage: true, roles: [] });
    expect(m.members).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: "school-b" } }));
+   expect(m.members).toHaveBeenCalledWith(expect.objectContaining({ take: 20, skip: 0 }));
+ });
+ it("paginates and searches members on the server instead of downloading every account", async () => {
+   await GET(new Request("http://localhost/api/organization?organizationId=school-b&page=3&limit=50&search=Eva"));
+   expect(m.members).toHaveBeenCalledWith(expect.objectContaining({ take: 50, skip: 100, where: expect.objectContaining({ organizationId: "school-b", OR: expect.any(Array) }) }));
  });
  it("does not allow a school administrator to select another school", async () => {
    m.session.mockResolvedValue({ user: schoolAdmin }); expect((await GET(request("school-b"))).status).toBe(403); expect(m.organization).not.toHaveBeenCalled();

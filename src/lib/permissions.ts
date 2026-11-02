@@ -12,7 +12,11 @@ export function primaryRole(roles: string[]): string {
   if (roles.includes("ADMIN")) return "ADMIN";
   if (roles.includes("TEACHER") || roles.includes("SCHOOL_ADMIN")) return "TEACHER";
   if (roles.includes("EVALUATOR")) return "EVALUATOR";
+  if (roles.includes("USER")) return "USER";
   return "STUDENT";
+}
+export function canCreateOrganization(user: PermissionUser): boolean {
+  return !isAdmin(user) && !user.organizationId && !hasRole(user, "STUDENT") && rolesOf(user).some((role) => role === "TEACHER" || role === "SCHOOL_ADMIN");
 }
 // Missing school membership must never become an unrestricted filter.
 export function schoolId(user: PermissionUser): string { return user.organizationId || "__no_organization__"; }

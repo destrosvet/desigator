@@ -42,7 +42,8 @@
     "ADMIN": "Administrator",
     "TEACHER": "Teacher",
     "EVALUATOR": "Evaluator",
-    "STUDENT": "Student"
+    "STUDENT": "Student",
+    "USER": "User"
   },
   "common": {
     "save": "Save",

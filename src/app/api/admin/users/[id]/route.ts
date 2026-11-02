@@ -13,8 +13,9 @@ const schema = z.object({
   name: z.string().trim().min(2).max(200), email: emailSchema,
   institution: z.string().trim().max(200).nullable(),
   externalId: z.string().trim().max(200).nullable(),
-  roles: z.array(z.enum(["ADMIN", "SCHOOL_ADMIN", "TEACHER", "EVALUATOR", "STUDENT"])).min(1).max(5)
+  roles: z.array(z.enum(["USER", "ADMIN", "SCHOOL_ADMIN", "TEACHER", "EVALUATOR", "STUDENT"])).min(1).max(5)
     .transform((roles) => [...new Set(roles)])
+    .refine((roles) => !roles.includes("USER") || roles.length === 1, "Základní účet nelze kombinovat s vyššími rolemi.")
     .refine((roles) => !roles.includes("STUDENT") || roles.length === 1, "Studenta nelze kombinovat s dalšími rolemi."),
   isActive: z.boolean(),
 }).strict();

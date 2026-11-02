@@ -4,7 +4,7 @@ import { evaluationScope } from "@/lib/evaluations";
 import { canEvaluate, canTeach } from "@/lib/permissions";
 
 export async function getDashboard(user: AuthUser) {
- const student = user.role === "STUDENT";
+ const student = user.role === "STUDENT" || user.role === "USER";
  const reviewer = !student && !canTeach(user);
  const tasks = visibleTaskScope(user);
  const reviews = evaluationScope(user);

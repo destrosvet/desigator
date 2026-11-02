@@ -24,7 +24,7 @@ type ManagedUser = {
 type UsersResponse = { users: ManagedUser[]; total: number; organizations: Organization[]; error?: string };
 
 const roleLabels: Record<string, string> = {
-  ADMIN: "Administrátor", SCHOOL_ADMIN: "Správce školy", TEACHER: "Učitel",
+  USER: "Uživatel", ADMIN: "Administrátor", SCHOOL_ADMIN: "Správce školy", TEACHER: "Učitel",
   EVALUATOR: "Hodnotitel", STUDENT: "Student",
 };
 
@@ -97,7 +97,7 @@ export function UserManagement() {
   return <div className="space-y-6">
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div><h1 className="text-3xl font-bold tracking-tight">Uživatelé</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">{admin ? "Správa všech účtů na platformě, jejich rolí a příslušnosti k organizaci." : "Členové vaší školy a externí hodnotitelé dostupní pro hodnocení."}</p></div>
-      <Button onClick={openCreate}><UserPlus className="size-4" />Vytvořit uživatele</Button>
+      <div className="flex flex-wrap gap-2">{admin && <Button asChild variant="outline"><Link href="/settings?section=access">Žádosti o oprávnění</Link></Button>}<Button onClick={openCreate}><UserPlus className="size-4" />Vytvořit uživatele</Button></div>
     </header>
     {error && !createOpen ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : null}
     <Card><CardHeader><CardTitle>Seznam uživatelů</CardTitle><CardDescription>{loading ? "Načítání…" : `Celkem ${total} účtů v dostupném rozsahu.`}</CardDescription></CardHeader><CardContent>

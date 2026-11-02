@@ -11,3 +11,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## User workflow preferences
 
 - Do not run browser checks, browser automation, or browser-based end-to-end tests. The user performs browser verification themselves. Verify changes with code review, unit/API tests, type checks, lint, builds, and deployment status/logs instead.
+- In this project, the user means committing and pushing to `main` when they ask to deploy ("nasadit"). Do not initiate separate hosting actions unless explicitly requested.

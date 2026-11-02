@@ -33,7 +33,7 @@ const authMiddleware = withAuth(
     }
 
     // Student only dashboard and tasks
-    if (role === "STUDENT" && (
+    if ((role === "STUDENT" || role === "USER") && (
       routePath.startsWith("/students") ||
       routePath.startsWith("/users") ||
       routePath.startsWith("/evaluations") ||
