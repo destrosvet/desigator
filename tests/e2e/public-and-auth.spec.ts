@@ -12,4 +12,6 @@ test("protected dashboard redirects an anonymous user to login", async ({ page }
   await page.goto("/cs/dashboard");
   await expect(page).toHaveURL(/\/cs\/auth\/login/);
   await expect(page.getByLabel(/e-mail/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Zapomněli jste heslo?", exact: true })).toHaveAttribute("href", "/cs/auth/forgot-password");
+  await expect(page.locator('a[href$="/auth/verify-email"]')).toHaveCount(0);
 });
