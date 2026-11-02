@@ -23,15 +23,15 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "navigation.dashboard", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
-  { href: "/classes", icon: BookOpen, label: "navigation.classes", roles: ["ADMIN", "TEACHER", "STUDENT"] },
-  { href: "/subjects", icon: BookOpen, label: "navigation.subjects", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
-  { href: "/tasks", icon: ClipboardList, label: "navigation.tasks", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
+  { href: "/dashboard", icon: LayoutDashboard, label: "navigation.dashboard", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT", "USER"] },
+  { href: "/classes", icon: BookOpen, label: "navigation.classes", roles: ["ADMIN", "TEACHER", "STUDENT", "USER"] },
+  { href: "/subjects", icon: BookOpen, label: "navigation.subjects", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT", "USER"] },
+  { href: "/tasks", icon: ClipboardList, label: "navigation.tasks", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT", "USER"] },
   { href: "/students", icon: Users, label: "navigation.students", roles: ["ADMIN", "TEACHER"] },
   { href: "/users", icon: UserRoundCog, label: "navigation.users", roles: ["ADMIN", "TEACHER"] },
   { href: "/evaluations", icon: GraduationCap, label: "navigation.evaluations", roles: ["ADMIN", "TEACHER", "EVALUATOR"] },
   { href: "/statistics", icon: ChartColumn, label: "navigation.statistics", roles: ["ADMIN", "TEACHER"] },
-  { href: "/settings", icon: Settings, label: "navigation.settings", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
+  { href: "/settings", icon: Settings, label: "navigation.settings", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT", "USER"] },
 ];
 
 export function AppShell({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {

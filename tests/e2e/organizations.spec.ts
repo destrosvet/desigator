@@ -1,9 +1,14 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-test.skip(process.env.E2E_ORGANIZATIONS !== "true", "Requires an isolated organization test database");
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
+test.skip(process.env.E2E_ORGANIZATIONS !== "true" || !process.env.E2E_ORGANIZATIONS_DATABASE_URL, "Requires an explicitly configured isolated organization test database");
 async function registerAndLogin(page: Page, email: string) {
-  const response = await page.request.post("/api/auth/register", { headers: { "x-forwarded-for": "e2e-" + email }, data: { name: email.split("@")[0], email, password: "OrganizationTest123!" } });
-  expect(response.status()).toBe(201);
-  const user = (await response.json()).user;
+  // Organization isolation uses verified, approved fixtures. Public registration and approval are tested separately.
+  const databaseUrl = process.env.E2E_ORGANIZATIONS_DATABASE_URL;
+  if (!databaseUrl) throw new Error("Explicit isolated test database is required");
+  const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
+  const student = email.startsWith("student-");
+  const user = await prisma.user.create({ data: { name: email.split("@")[0], email, password: await bcrypt.hash("OrganizationTest123!", 12), role: student ? "USER" : "TEACHER", roles: student ? ["USER"] : ["TEACHER", "EVALUATOR"], emailVerifiedAt: new Date() } }).finally(() => prisma.$disconnect());
   await page.goto("/cs/auth/login");
   await page.getByLabel(/e-mail/i).fill(email); await page.getByLabel(/heslo/i).fill("OrganizationTest123!");
   await page.getByRole("button", { name: /přihlásit/i }).click(); await page.waitForURL(/dashboard/);

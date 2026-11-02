@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isAdmin, primaryRole, rolesOf, hasSchoolMembership } from "@/lib/permissions";
+import { isAdmin, primaryRole, rolesOf, hasSchoolMembership, canCreateOrganization } from "@/lib/permissions";
 import { organizationTarget, canManageOrganization } from "@/lib/organization-access";
 import { OrganizationError } from "@/lib/organizations";
 export async function GET(req: Request) {
@@ -11,20 +11,29 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const target = organizationTarget(session.user, req);
   if (new URL(req.url).searchParams.has("organizationId") && !target) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const organization = target ? await db.organization.findUnique({ where: { id: target }, select: { id: true, name: true, gradingScale: true } }) : null;
   const canManage = canManageOrganization(session.user, target);
-  const members = organization && canManage ? await db.user.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true, email: true, role: true, roles: true }, orderBy: { name: "asc" }, take: 1000 }) : [];
-  return NextResponse.json({ organization, members, canManage, roles: organization?.id === session.user.organizationId && hasSchoolMembership(session.user) ? rolesOf(session.user).filter((role) => role !== "ADMIN") : [] }, { headers: { "Cache-Control": "no-store" } });
+  const query = new URL(req.url).searchParams;
+  const page = Math.max(1, Math.floor(Number(query.get("page")) || 1));
+  const limit = Math.min(100, Math.max(10, Math.floor(Number(query.get("limit")) || 20)));
+  const search = (query.get("search") || "").trim().slice(0, 200);
+  const where = { organizationId: target!, ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" as const } }, { email: { contains: search, mode: "insensitive" as const } }] } : {}) };
+  const [organization, members, total] = await Promise.all([
+    target ? db.organization.findUnique({ where: { id: target }, select: { id: true, name: true, gradingScale: true } }) : null,
+    target && canManage ? db.user.findMany({ where, select: { id: true, name: true, email: true, role: true, roles: true }, orderBy: [{ name: "asc" }, { id: "asc" }], skip: (page - 1) * limit, take: limit }) : [],
+    target && canManage ? db.user.count({ where }) : 0,
+  ]);
+  return NextResponse.json({ organization, members, total, page, limit, canManage, canCreate: canCreateOrganization(session.user), roles: organization?.id === session.user.organizationId && hasSchoolMembership(session.user) ? rolesOf(session.user).filter((role) => role !== "ADMIN") : [] }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (isAdmin(session.user) && !hasSchoolMembership(session.user)) return NextResponse.json({ error: "Správce platformy spravuje školy v přehledu Organizace. Školní působení získá samostatnou pozvánkou." }, { status: 403 });
+  if (!canCreateOrganization(session.user)) return NextResponse.json({ error: "Založení školy vyžaduje schválené oprávnění učitele nebo správce školy. Podejte žádost v Nastavení → Oprávnění." }, { status: 403 });
   try {
     const { name } = z.object({ name: z.string().trim().min(2).max(200) }).strict().parse(await req.json());
     const organization = await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.user.id} FOR UPDATE`;
       const user = await tx.user.findUniqueOrThrow({ where: { id: session.user.id } });
+      if (!user.isActive || !user.emailVerifiedAt || !canCreateOrganization(user)) throw new OrganizationError("Nemáte schválené oprávnění k založení školy.", 403);
       if (user.organizationId) throw new OrganizationError("Už patříte do školy. Účet může mít jednu domovskou školu.");
       // Existing student work must stay attached to its original school.
       if (await tx.submission.count({ where: { studentId: user.id } }) || await tx.classStudent.count({ where: { studentId: user.id } })) throw new OrganizationError("Účet již má studentskou historii. Založení školy vyžaduje samostatný účet.");

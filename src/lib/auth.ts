@@ -29,7 +29,7 @@ export const authOptions: NextAuthOptions = {
           where: { email: { equals: credentials.email.trim().toLowerCase(), mode: "insensitive" } },
         });
 
-        if (!user || !user.isActive) {
+        if (!user || !user.isActive || user.emailVerifiedAt === null) {
           return null;
         }
 
@@ -67,8 +67,8 @@ export const authOptions: NextAuthOptions = {
         token.organizationId = user.organizationId;
       }
       if (token.id) {
-        const current = await db.user.findUnique({ where: { id: token.id as string }, select: { roles: true, role: true, organizationId: true, isActive: true, sessionVersion: true } });
-        token.active = !!current?.isActive && (token.sessionVersion ?? 0) === current.sessionVersion;
+        const current = await db.user.findUnique({ where: { id: token.id as string }, select: { roles: true, role: true, organizationId: true, isActive: true, sessionVersion: true, emailVerifiedAt: true } });
+        token.active = !!current?.isActive && current.emailVerifiedAt !== null && (token.sessionVersion ?? 0) === current.sessionVersion;
         if (current) { token.roles = current.roles.length ? current.roles : [current.role]; token.role = primaryRole(token.roles as string[]); token.organizationId = current.organizationId; }
       }
       return token;

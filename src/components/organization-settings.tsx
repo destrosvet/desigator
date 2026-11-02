@@ -4,6 +4,7 @@ import {SchoolGradingSettings} from "@/components/school-grading-settings";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { isAdmin, rolesOf } from "@/lib/permissions";
+import { Link } from "@/components/navigation";
 import { useParams, useRouter } from "next/navigation";
 import { DataTable } from "@/components/data-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -15,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const roleLabels: Record<string, string> = { ADMIN: "Správce platformy", SCHOOL_ADMIN: "Správce školy", TEACHER: "Učitel", EVALUATOR: "Hodnotitel", STUDENT: "Student" };
 const staffRoles = ["SCHOOL_ADMIN", "TEACHER", "EVALUATOR"];
 type Member = { id: string; name: string; email: string; role: string; roles: string[] };
-type SchoolData = { organization: { id: string; name: string; gradingScale?: unknown } | null; members: Member[]; canManage: boolean; roles: string[] };
+type SchoolData = { organization: { id: string; name: string; gradingScale?: unknown } | null; members: Member[]; total: number; canManage: boolean; canCreate: boolean; roles: string[] };
 function RoleChoices({ value, onChange, disabled, student = false }: { value: string[]; onChange: (roles: string[]) => void; disabled: boolean; student?: boolean }) {
   const options = student ? [...staffRoles, "STUDENT"] : staffRoles;
   return <div className="flex flex-wrap gap-4">{options.map((role) => <label key={role} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value.includes(role)} disabled={disabled} onChange={(event) => onChange(event.target.checked ? role === "STUDENT" ? [role] : [...value.filter((item) => item !== "STUDENT"), role] : value.filter((item) => item !== role))} />{roleLabels[role]}</label>)}</div>;
@@ -28,6 +29,7 @@ function MemberEditor({ member, disabled, save }: { member: Member; disabled: bo
 }
 export function OrganizationSettings({ title = "Moje škola", organizationId }: { title?: string; organizationId?: string }) {
   const { update, data: session } = useSession();
+  const sessionScope = JSON.stringify([session?.user.id, session?.user.role, session?.user.roles, session?.user.organizationId]);
   const targetQuery = organizationId ? "?organizationId=" + encodeURIComponent(organizationId) : "";
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
@@ -37,6 +39,8 @@ export function OrganizationSettings({ title = "Moje škola", organizationId }: 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const query = new URLSearchParams({ page: String(page), limit: String(limit), ...(search ? { search } : {}), ...(organizationId ? { organizationId } : {}) });
+  const readUrl = "/api/organization?" + query.toString();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SchoolData | null>(null);
   const [name, setName] = useState("");
@@ -46,20 +50,20 @@ export function OrganizationSettings({ title = "Moje škola", organizationId }: 
   const [message, setMessage] = useState("");
   const [invitation, setInvitation] = useState("");
   async function load(signal?: AbortSignal) {
-    const response = await fetch("/api/organization" + targetQuery, { signal });
+    const response = await fetch(readUrl, { signal });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Školu se nepodařilo načíst.");
     setData(result); setName(result.organization?.name || "");
   }
   useEffect(() => {
     const controller = new AbortController();
-    void fetch("/api/organization" + targetQuery, { signal: controller.signal }).then(async (response) => {
+    void fetch(readUrl, { signal: controller.signal }).then(async (response) => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Školu se nepodařilo načíst.");
       if (!controller.signal.aborted) { setData(result); setName(result.organization?.name || ""); }
     }).catch((error) => { if (!controller.signal.aborted) setMessage(error.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [targetQuery]);
+  }, [readUrl, sessionScope]);
   async function mutate(url: string, method: string, body: object): Promise<boolean> {
     setBusy(true); setMessage("");
     try {
@@ -67,22 +71,27 @@ export function OrganizationSettings({ title = "Moje škola", organizationId }: 
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Změna se nepodařila.");
       if (result.token) { setInvitation(window.location.origin + "/" + locale + "/invitations/" + result.token); setMessage("Pozvánka platí 7 dní. Odkaz předejte pozvanému člověku."); }
-      else { await update(); await load(); router.refresh(); setMessage("Uloženo."); }
+      else {
+        const membershipChanged = (url === "/api/organization" && method === "POST") || url === "/api/organization/members/" + session?.user.id;
+        await Promise.all([load(), ...(membershipChanged ? [update()] : [])]);
+        if (membershipChanged) router.refresh();
+        setMessage("Uloženo.");
+      }
       return true;
     } catch (error) { setMessage(error instanceof Error ? error.message : "Změna se nepodařila."); return false; }
     finally { setBusy(false); }
   }
-  const members = (data?.members || []).filter((member) => (member.name + " " + member.email).toLocaleLowerCase("cs").includes(search.toLocaleLowerCase("cs")));
+  const members = data?.members || [];
   const memberRoles = (member: Member) => (member.roles.length ? member.roles : [member.role]).map((role) => roleLabels[role] || role).join(", ");
   return <div className="space-y-5">
     <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="space-y-5">
       {loading ? <p>Načítání školy…</p> : !data ? <p>Školu se nepodařilo načíst. Obnovte stránku a zkuste to znovu.</p> : data.organization ? <>
         <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xl font-semibold tracking-tight">{data.organization.name}</p><p className="mt-2 text-sm text-muted-foreground">{data.roles.length ? "Školní oprávnění: " + data.roles.filter((role) => role !== "ADMIN").map((role) => roleLabels[role] || role).join(", ") : "Správa organizace jako správce platformy"}</p></div>{data.canManage && <Button variant="outline" onClick={() => { setName(data.organization?.name || ""); setMessage(""); setSchoolOpen(true); }}><Pencil className="size-4" />Upravit školu</Button>}</div>
         {!data.canManage && <p className="text-sm text-muted-foreground">Členy a oprávnění spravuje správce vaší školy.</p>}
-      </> : <form className="max-w-lg space-y-3" onSubmit={(event) => { event.preventDefault(); void mutate("/api/organization", "POST", { name }); }}><p className="text-sm text-muted-foreground">Založte vlastní školu, nebo přijměte pozvánku od jejího správce. Zakladatel získá oprávnění správce školy, učitele a hodnotitele.</p><Label htmlFor="new-school-name">Název nové školy</Label><Input id="new-school-name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={200} required disabled={busy} /><Button disabled={busy}>Založit školu</Button></form>}
+      </> : data.canCreate ? <form className="max-w-lg space-y-3" onSubmit={(event) => { event.preventDefault(); void mutate("/api/organization", "POST", { name }); }}><p className="text-sm text-muted-foreground">Založte vlastní školu, nebo přijměte pozvánku od jejího správce. Zakladatel získá oprávnění správce školy, učitele a hodnotitele.</p><Label htmlFor="new-school-name">Název nové školy</Label><Input id="new-school-name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={200} required disabled={busy} /><Button disabled={busy}>Založit školu</Button></form> : <div className="space-y-3"><p className="text-sm text-muted-foreground">Založení školy vyžaduje oprávnění učitele nebo správce školy schválené administrátorem. Jako student se můžete připojit pozvánkou do existující školy.</p><Button asChild variant="outline"><Link href="/settings?section=access">Požádat o vyšší oprávnění</Link></Button></div>}
       {message && !inviteOpen && !selectedMember && !schoolOpen ? <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm">{message}</p> : null}
     </CardContent></Card>
-    {data?.organization && data.canManage && <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle>Členové a oprávnění</CardTitle><p className="mt-2 text-sm text-muted-foreground">Kliknutím na člena zobrazíte jeho oprávnění. Pracovníci školy mohou kombinovat více rolí.</p></div><Button onClick={() => { setInviteOpen(true); setMessage(""); }}><UserPlus className="size-4" />Pozvat člena</Button></div></CardHeader><CardContent><DataTable onEditRow={(member) => { setSelectedMember(member); setMessage(""); }} management={{ entity: "members", contextId: data.organization.id, fields: [{ key: "roles", label: "Školní oprávnění", type: "select", options: [{ value: "TEACHER,EVALUATOR", label: "Učitel a hodnotitel" }, { value: "TEACHER", label: "Učitel" }, { value: "EVALUATOR", label: "Hodnotitel" }, { value: "SCHOOL_ADMIN,TEACHER,EVALUATOR", label: "Správce školy, učitel a hodnotitel" }, { value: "SCHOOL_ADMIN", label: "Správce školy" }, { value: "STUDENT", label: "Student" }] }], onSaved: load }} membershipRemoval removalLabel="Odebrat z organizace" deleteDescription="Člen ztratí školní oprávnění. Účet zůstane zachovaný; člena s navázanou výukou nebo historií nelze odebrat." onDeleteRows={async (ids) => { await manageTableRows("members", ids, undefined, data.organization!.id); await load(); }} canManageRow={(member) => Boolean(session?.user && (isAdmin(session.user) || !rolesOf(member).includes("ADMIN")))} tableId="organization-members" clientPagination data={members} total={members.length} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Vyhledat člena školy…" onRowClick={(member) => { setSelectedMember(member); setMessage(""); }} columns={[
+    {data?.organization && data.canManage && <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle>Členové a oprávnění</CardTitle><p className="mt-2 text-sm text-muted-foreground">Kliknutím na člena zobrazíte jeho oprávnění. Pracovníci školy mohou kombinovat více rolí.</p></div><Button onClick={() => { setInviteOpen(true); setMessage(""); }}><UserPlus className="size-4" />Pozvat člena</Button></div></CardHeader><CardContent><DataTable onEditRow={(member) => { setSelectedMember(member); setMessage(""); }} management={{ entity: "members", contextId: data.organization.id, fields: [{ key: "roles", label: "Školní oprávnění", type: "select", options: [{ value: "TEACHER,EVALUATOR", label: "Učitel a hodnotitel" }, { value: "TEACHER", label: "Učitel" }, { value: "EVALUATOR", label: "Hodnotitel" }, { value: "SCHOOL_ADMIN,TEACHER,EVALUATOR", label: "Správce školy, učitel a hodnotitel" }, { value: "SCHOOL_ADMIN", label: "Správce školy" }, { value: "STUDENT", label: "Student" }] }], onSaved: load }} membershipRemoval removalLabel="Odebrat z organizace" deleteDescription="Člen ztratí školní oprávnění. Účet zůstane zachovaný; člena s navázanou výukou nebo historií nelze odebrat." onDeleteRows={async (ids) => { await manageTableRows("members", ids, undefined, data.organization!.id); await load(); }} canManageRow={(member) => Boolean(session?.user && (isAdmin(session.user) || !rolesOf(member).includes("ADMIN")))} tableId="organization-members" data={members} total={data.total} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Vyhledat člena školy…" onRowClick={(member) => { setSelectedMember(member); setMessage(""); }} columns={[
       { key: "name", label: "Jméno", render: (member: Member) => <span className="font-medium">{member.name}</span> },
       { key: "email", label: "E-mail" },
       { key: "roles", label: "Oprávnění", sortValue: memberRoles, render: (member: Member) => <span className="text-sm">{memberRoles(member)}</span> },

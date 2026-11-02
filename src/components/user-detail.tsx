@@ -13,7 +13,7 @@ type User = {
   roles: string[]; isActive: boolean; organizationId: string | null; organization: { name: string } | null;
   createdAt: string; updatedAt: string; _count: { taughtClasses: number; classMemberships: number; createdSubjects: number; createdTasks: number; submissions: number; evaluations: number };
 };
-const roleLabels = { ADMIN: "Administrátor", SCHOOL_ADMIN: "Správce školy", TEACHER: "Učitel", EVALUATOR: "Hodnotitel", STUDENT: "Student" };
+const roleLabels = { USER: "Uživatel", ADMIN: "Administrátor", SCHOOL_ADMIN: "Správce školy", TEACHER: "Učitel", EVALUATOR: "Hodnotitel", STUDENT: "Student" };
 
 export function UserDetail({ user, self, admin = true }: { user: User; self: boolean; admin?: boolean }) {
   const router = useRouter();

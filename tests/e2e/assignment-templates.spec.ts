@@ -16,9 +16,13 @@ test("personal templates in settings copy criteria into independent assignments"
     const template = (await (await page.request.get("/api/task-templates")).json()).templates.find((item: { title: string }) => item.title === title);
     expect(template).toBeTruthy();
     const admin = await foreign.newPage(); await login(admin, "admin@desigator.cz", "admin123");
-    expect((await (await admin.request.get("/api/task-templates")).json()).templates.some((item: { id: string }) => item.id === template.id)).toBe(false);
-    expect((await admin.request.patch("/api/task-templates", { data: { ...template, title: "Cizí změna" } })).status()).toBe(404);
-    expect((await admin.request.delete("/api/task-templates", { data: { ids: [template.id], confirmed: true } })).status()).toBe(404);
+    // Platform administrators manage all templates; creating a separate assignment still copies their content.
+    expect((await (await admin.request.get("/api/task-templates")).json()).templates.some((item: { id: string }) => item.id === template.id)).toBe(true);
+    expect((await admin.request.patch("/api/task-templates", { data: { ...template, description: "Správa administrátorem" } })).status()).toBe(200);
+    const disposableResponse = await admin.request.post("/api/task-templates", { data: { ...template, title: title + " – ke smazání" } });
+    expect(disposableResponse.status()).toBe(201);
+    const disposable = (await disposableResponse.json()).template;
+    expect((await admin.request.delete("/api/task-templates", { data: { ids: [disposable.id], confirmed: true } })).status()).toBe(200);
     await page.goto("/cs/tasks"); await page.getByRole("button", { name: "Nové zadání", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("combobox", { name: "Šablona zadání", exact: true }).click(); await page.getByRole("option", { name: title, exact: true }).click();
