@@ -26,7 +26,8 @@ const authMiddleware = withAuth(
     if (role === "EVALUATOR" && (
       pathname.includes("/tasks/new") ||
       pathname.includes("/classes/new") ||
-      pathname.includes("/students/bulk")
+      pathname.includes("/students/bulk") ||
+      routePath.startsWith("/users")
     )) {
       return NextResponse.redirect(new URL("/", req.url));
     }
@@ -34,6 +35,7 @@ const authMiddleware = withAuth(
     // Student only dashboard and tasks
     if (role === "STUDENT" && (
       routePath.startsWith("/students") ||
+      routePath.startsWith("/users") ||
       routePath.startsWith("/evaluations") ||
       pathname.includes("/classes/new")
     )) {
