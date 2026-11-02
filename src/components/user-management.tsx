@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { Link } from "@/components/navigation";
+import { manageTableRows, activeField, institutionField } from "@/lib/table-management";
 import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ import { rolesOf } from "@/lib/permissions";
 type Role = "STUDENT" | "TEACHER" | "EVALUATOR";
 type Organization = { id: string; name: string };
 type ManagedUser = {
-  id: string; name: string; email: string; role: string; roles: string[];
+  id: string; name: string; email: string; role: string; roles: string[]; canManage: boolean;
   organizationId: string | null; organization: { name: string } | null;
   isActive: boolean; createdAt: string;
 };
@@ -100,8 +101,8 @@ export function UserManagement() {
     </header>
     {error && !createOpen ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : null}
     <Card><CardHeader><CardTitle>Seznam uživatelů</CardTitle><CardDescription>{loading ? "Načítání…" : `Celkem ${total} účtů v dostupném rozsahu.`}</CardDescription></CardHeader><CardContent>
-      <DataTable onRowClick={admin ? (user) => router.push(`/${locale}/users/${encodeURIComponent(user.id)}`) : undefined} tableId="user-management" data={users} total={total} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Hledat jméno nebo e-mail…" columns={[
-        { key: "name", label: "Jméno", render: (user: ManagedUser) => admin ? <Link href={`/users/${encodeURIComponent(user.id)}`} className="font-medium hover:underline" onClick={(event) => event.stopPropagation()}>{user.name}</Link> : <span className="font-medium">{user.name}</span> },
+      <DataTable canManageRow={(user) => user.canManage} onRowClick={(user) => { if (user.canManage) router.push(`/${locale}/users/${encodeURIComponent(user.id)}`); }} onEditRow={(user) => router.push(`/${locale}/users/${encodeURIComponent(user.id)}`)} management={{ entity: "users", fields: [institutionField, ...(admin ? [activeField] : [])], onSaved: load }} onDeleteRows={admin ? async (ids) => { await manageTableRows("users", ids); await load(); } : undefined} tableId="user-management" data={users} total={total} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Hledat jméno nebo e-mail…" columns={[
+        { key: "name", label: "Jméno", render: (user: ManagedUser) => user.canManage ? <Link href={`/users/${encodeURIComponent(user.id)}`} className="font-medium hover:underline" onClick={(event) => event.stopPropagation()}>{user.name}</Link> : <span className="font-medium">{user.name}</span> },
         { key: "email", label: "E-mail" },
         { key: "roles", label: "Oprávnění", render: (user: ManagedUser) => <span>{rolesOf(user).map((item) => roleLabels[item] || item).join(", ")}</span> },
         { key: "organization", label: "Organizace", render: (user: ManagedUser) => user.organization?.name || <span className="text-muted-foreground">Externí</span> },

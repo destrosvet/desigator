@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn(), count: vi.fn(), update: vi.fn(), raw: vi.fn() }));
+const m = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn(), scoped: vi.fn(), count: vi.fn(), update: vi.fn(), raw: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: m.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("@/lib/db", () => ({ db: { $transaction: async (fn: (tx: unknown) => unknown) => fn({ $queryRaw: m.raw, user: { findUnique: m.find, count: m.count, update: m.update } }) } }));
+vi.mock("@/lib/db", () => ({ db: { $transaction: async (fn: (tx: unknown) => unknown) => fn({ $queryRaw: m.raw, user: { findUnique: m.find, findFirst: m.scoped, count: m.count, update: m.update } }) } }));
 import { PATCH } from "@/app/api/admin/users/[id]/route";
 const actor = { id: "admin", role: "ADMIN", roles: ["ADMIN"], isActive: true };
 const member = { id: "member", role: "TEACHER", roles: ["TEACHER"], isActive: true, organizationId: "school" };
@@ -18,8 +18,20 @@ describe("administrator user detail", () => {
     expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ role: "TEACHER", roles: ["TEACHER", "EVALUATOR"], institution: null }) }));
     expect((await patch({ ...data, password: "injected" })).status).toBe(400);
   });
-  it("rejects non-administrators", async () => {
+  it("rejects evaluators", async () => {
+    m.session.mockResolvedValue({ user: { ...member, role: "EVALUATOR", roles: ["EVALUATOR"] } });
+    expect((await patch()).status).toBe(403); expect(m.update).not.toHaveBeenCalled();
+  });
+  it("allows teachers to edit only students in their managed scope", async () => {
     m.session.mockResolvedValue({ user: member });
+    m.find.mockReset().mockResolvedValueOnce(member).mockResolvedValue({ ...member, id: "student", role: "STUDENT", roles: ["STUDENT"] });
+    m.scoped.mockResolvedValue({ id: "student" });
+    expect((await patch({ ...data, roles: ["STUDENT"] }, "student")).status).toBe(200);
+    expect(m.scoped).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ AND: expect.arrayContaining([expect.objectContaining({ role: "STUDENT", organizationId: "school" })]) }) }));
+    expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ data: { name: data.name, email: data.email, institution: null, externalId: null } }));
+  });
+  it("rejects teacher edits outside their scope", async () => {
+    m.session.mockResolvedValue({ user: member }); m.find.mockReset().mockResolvedValue(member); m.scoped.mockResolvedValue(null);
     expect((await patch()).status).toBe(403); expect(m.update).not.toHaveBeenCalled();
   });
   it("returns 404 for missing accounts", async () => {

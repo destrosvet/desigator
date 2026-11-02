@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageSubject, canViewSubject, managedClassScope, visibleTaskScope } from "@/lib/authorization";
 import { z } from "zod";
+import { isAdmin, isSchoolAdmin } from "@/lib/permissions";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -18,13 +19,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const subject = await db.subject.findUnique({
       where: { id },
       include: {
-        classes: { select: { classId: true, class: { select: { id: true, name: true } } }, orderBy: { class: { name: "asc" } } },
+        classes: { select: { classId: true, class: { select: { id: true, name: true, organizationId: true } } }, orderBy: { class: { name: "asc" } } },
         teacher: { select: { id: true, name: true } },
         tasks: { where: visibleTaskScope(session.user), orderBy: { createdAt: "desc" } },
       },
     });
     if (!subject) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ subject });
+    const sameSchool = subject.classes.some((link) => link.class.organizationId === session.user.organizationId);
+    return NextResponse.json({ subject: { ...subject, canManage: isAdmin(session.user) || (sameSchool && (isSchoolAdmin(session.user) || subject.teacherId === session.user.id)), tasks: subject.tasks.map((task) => ({ ...task, canManage: isAdmin(session.user) || (sameSchool && (isSchoolAdmin(session.user) || task.creatorId === session.user.id)) })) } });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch subject" }, { status: 500 });
   }

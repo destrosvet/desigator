@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { criteriaInputSchema, rubricError } from "@/lib/task-validation";
+import { isAdmin } from "@/lib/permissions";
 
 const schema = z.object({
   title: z.string().trim().min(1).max(300),
@@ -19,7 +20,7 @@ async function user() {
 export async function GET() {
   const owner = await user();
   if (!owner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const templates = await db.assignmentTemplate.findMany({ where: { creatorId: owner.id }, orderBy: { title: "asc" } });
+  const templates = await db.assignmentTemplate.findMany({ where: isAdmin(owner) ? {} : { creatorId: owner.id }, orderBy: { title: "asc" } });
   return NextResponse.json({ templates });
 }
 async function save(req: Request, editing: boolean) {
@@ -33,7 +34,7 @@ async function save(req: Request, editing: boolean) {
     const data = { ...parsed, criteria: parsed.criteria.map(({ name, description, maxPoints }) => ({ name, description: description ?? null, maxPoints })) };
     if (editing) {
       const id = z.string().min(1).parse(body.id);
-      const result = await db.assignmentTemplate.updateMany({ where: { id, creatorId: owner.id }, data });
+      const result = await db.assignmentTemplate.updateMany({ where: { id, ...(isAdmin(owner) ? {} : { creatorId: owner.id }) }, data });
       if (!result.count) return NextResponse.json({ error: "Šablona nebyla nalezena." }, { status: 404 });
       return NextResponse.json({ success: true });
     }
@@ -52,9 +53,9 @@ export async function DELETE(req: Request) {
     const { ids, confirmed } = z.object({ ids: z.array(z.string().min(1)).min(1).max(100), confirmed: z.literal(true) }).parse(await req.json());
     const unique = [...new Set(ids)];
     const result = await db.$transaction(async (tx) => {
-      const count = await tx.assignmentTemplate.count({ where: { id: { in: unique }, creatorId: owner.id } });
+      const count = await tx.assignmentTemplate.count({ where: { id: { in: unique }, ...(isAdmin(owner) ? {} : { creatorId: owner.id }) } });
       if (count !== unique.length) return false;
-      await tx.assignmentTemplate.deleteMany({ where: { id: { in: unique }, creatorId: owner.id } });
+      await tx.assignmentTemplate.deleteMany({ where: { id: { in: unique }, ...(isAdmin(owner) ? {} : { creatorId: owner.id }) } });
       return true;
     });
     if (!result || !confirmed) return NextResponse.json({ error: "Některé šablony nebyly nalezeny." }, { status: 404 });

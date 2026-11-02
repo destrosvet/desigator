@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ClassManagementTable } from "@/components/class-management-table";
 import { AppShell } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Loader2, Plus, Users } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 type ClassItem = {
   id: string;
@@ -19,6 +18,7 @@ type ClassItem = {
   code: string;
   description: string | null;
   academicYear: number | null;
+  isActive: boolean;
   teacher: { name: string };
   _count: { students: number; subjects: number };
 };
@@ -102,18 +102,7 @@ export function ClassesClient({ classes, role, locale, organizations, defaultOrg
           </Dialog>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {classes.map((item) => (
-            <Card key={item.id} className="min-w-0 cursor-pointer transition-shadow hover:shadow-md" onClick={() => router.push(`/${locale}/classes/${item.id}`)}>
-              <CardHeader className="min-w-0"><div className="flex min-w-0 flex-col items-start gap-2"><CardTitle className="max-w-full [overflow-wrap:anywhere]">{item.name}</CardTitle><Badge variant="outline" className="max-w-full whitespace-normal text-left [overflow-wrap:anywhere]">{item.code}</Badge></div></CardHeader>
-              <CardContent className="min-w-0 space-y-3 [overflow-wrap:anywhere]">
-                <p className="text-sm text-muted-foreground">{item.description || "Bez popisu"}</p>{item.academicYear ? <p className="text-sm text-muted-foreground">Akademický rok {item.academicYear}/{String(item.academicYear + 1).slice(-2)}</p> : null}
-                <p className="text-sm">Učitel: {item.teacher.name}</p>
-                <div className="flex gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Users className="size-4" />{item._count.students}</span><span className="flex items-center gap-1"><BookOpen className="size-4" />{item._count.subjects}</span></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <ClassManagementTable classes={classes} canManage={canCreate} locale={locale} />
         {!classes.length ? <p className="rounded-lg border p-8 text-center text-muted-foreground">Zatím nejste v žádné třídě.</p> : null}
       </div>
     </AppShell>

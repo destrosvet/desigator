@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { managedClassScope } from "@/lib/authorization";
+import { isAdmin, isSchoolAdmin } from "@/lib/permissions";
 
 const subjectSchema = z.object({
   name: z.string().min(1),
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
       db.subject.findMany({
         where,
         include: {
-          classes: { select: { classId: true, class: { select: { name: true } } }, orderBy: { class: { name: "asc" } } },
+          classes: { select: { classId: true, class: { select: { name: true, organizationId: true } } }, orderBy: { class: { name: "asc" } } },
           teacher: { select: { name: true } },
           _count: { select: { tasks: { where: visibleTaskScope(session.user) } } },
         },
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
       db.subject.count({ where }),
     ]);
 
-    return NextResponse.json({ subjects, total, page, limit });
+    return NextResponse.json({ subjects: subjects.map((subject) => ({ ...subject, canManage: isAdmin(session.user) || (subject.classes.some((link) => link.class.organizationId === session.user.organizationId) && (isSchoolAdmin(session.user) || subject.teacherId === session.user.id)) })), total, page, limit });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch subjects" }, { status: 500 });
   }

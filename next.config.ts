@@ -4,6 +4,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   output: "standalone",
   // Sharp 0.35 ships native DLLs/shared libraries beside its Node addon.
   outputFileTracingIncludes: { "/*": ["./node_modules/@img/sharp-*/lib/**/*"] },

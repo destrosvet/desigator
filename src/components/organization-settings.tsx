@@ -1,7 +1,9 @@
 "use client";
+import { manageTableRows } from "@/lib/table-management";
 import {SchoolGradingSettings} from "@/components/school-grading-settings";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { isAdmin, rolesOf } from "@/lib/permissions";
 import { useParams, useRouter } from "next/navigation";
 import { DataTable } from "@/components/data-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -25,7 +27,7 @@ function MemberEditor({ member, disabled, save }: { member: Member; disabled: bo
   return <div className="space-y-3 border-t py-4"><div><p className="font-medium">{member.name}</p><p className="text-sm text-muted-foreground">{member.email}{initial.includes("ADMIN") ? " · Správce platformy" : ""}</p></div><RoleChoices value={roles} onChange={setRoles} disabled={disabled} /><Button size="sm" variant="outline" disabled={disabled || !roles.length || JSON.stringify(roles.slice().sort()) === JSON.stringify(initial.filter((role) => role !== "ADMIN").sort())} onClick={() => void save(member.id, roles)}>Uložit oprávnění</Button></div>;
 }
 export function OrganizationSettings({ title = "Moje škola", organizationId }: { title?: string; organizationId?: string }) {
-  const { update } = useSession();
+  const { update, data: session } = useSession();
   const targetQuery = organizationId ? "?organizationId=" + encodeURIComponent(organizationId) : "";
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
@@ -80,7 +82,7 @@ export function OrganizationSettings({ title = "Moje škola", organizationId }: 
       </> : <form className="max-w-lg space-y-3" onSubmit={(event) => { event.preventDefault(); void mutate("/api/organization", "POST", { name }); }}><p className="text-sm text-muted-foreground">Založte vlastní školu, nebo přijměte pozvánku od jejího správce. Zakladatel získá oprávnění správce školy, učitele a hodnotitele.</p><Label htmlFor="new-school-name">Název nové školy</Label><Input id="new-school-name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={200} required disabled={busy} /><Button disabled={busy}>Založit školu</Button></form>}
       {message && !inviteOpen && !selectedMember && !schoolOpen ? <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm">{message}</p> : null}
     </CardContent></Card>
-    {data?.organization && data.canManage && <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle>Členové a oprávnění</CardTitle><p className="mt-2 text-sm text-muted-foreground">Kliknutím na člena zobrazíte jeho oprávnění. Pracovníci školy mohou kombinovat více rolí.</p></div><Button onClick={() => { setInviteOpen(true); setMessage(""); }}><UserPlus className="size-4" />Pozvat člena</Button></div></CardHeader><CardContent><DataTable tableId="organization-members" clientPagination data={members} total={members.length} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Vyhledat člena školy…" onRowClick={(member) => { setSelectedMember(member); setMessage(""); }} columns={[
+    {data?.organization && data.canManage && <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle>Členové a oprávnění</CardTitle><p className="mt-2 text-sm text-muted-foreground">Kliknutím na člena zobrazíte jeho oprávnění. Pracovníci školy mohou kombinovat více rolí.</p></div><Button onClick={() => { setInviteOpen(true); setMessage(""); }}><UserPlus className="size-4" />Pozvat člena</Button></div></CardHeader><CardContent><DataTable onEditRow={(member) => { setSelectedMember(member); setMessage(""); }} management={{ entity: "members", contextId: data.organization.id, fields: [{ key: "roles", label: "Školní oprávnění", type: "select", options: [{ value: "TEACHER,EVALUATOR", label: "Učitel a hodnotitel" }, { value: "TEACHER", label: "Učitel" }, { value: "EVALUATOR", label: "Hodnotitel" }, { value: "SCHOOL_ADMIN,TEACHER,EVALUATOR", label: "Správce školy, učitel a hodnotitel" }, { value: "SCHOOL_ADMIN", label: "Správce školy" }, { value: "STUDENT", label: "Student" }] }], onSaved: load }} membershipRemoval removalLabel="Odebrat z organizace" deleteDescription="Člen ztratí školní oprávnění. Účet zůstane zachovaný; člena s navázanou výukou nebo historií nelze odebrat." onDeleteRows={async (ids) => { await manageTableRows("members", ids, undefined, data.organization!.id); await load(); }} canManageRow={(member) => Boolean(session?.user && (isAdmin(session.user) || !rolesOf(member).includes("ADMIN")))} tableId="organization-members" clientPagination data={members} total={members.length} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Vyhledat člena školy…" onRowClick={(member) => { setSelectedMember(member); setMessage(""); }} columns={[
       { key: "name", label: "Jméno", render: (member: Member) => <span className="font-medium">{member.name}</span> },
       { key: "email", label: "E-mail" },
       { key: "roles", label: "Oprávnění", sortValue: memberRoles, render: (member: Member) => <span className="text-sm">{memberRoles(member)}</span> },

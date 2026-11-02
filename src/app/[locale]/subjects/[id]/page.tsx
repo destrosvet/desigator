@@ -17,6 +17,7 @@ import { DataTable } from "@/components/data-table";
 import { ArrowLeft, Save, Trash2, Loader2, ClipboardList } from "lucide-react";
 
 interface Task {
+  canManage: boolean;
   id: string;
   title: string;
   description: string | null;
@@ -28,6 +29,7 @@ interface Task {
 interface ClassOption { id: string; name: string }
 
 interface SubjectDetail {
+  canManage: boolean;
   id: string;
   code: string;
   name: string;
@@ -112,7 +114,7 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
     catch (error) { setMessage(error instanceof Error ? error.message : "Smazání selhalo."); }
   };
 
-  const canEdit = session?.user?.role === "ADMIN" || session?.user?.role === "TEACHER";
+  const canEdit = Boolean(subject?.canManage);
 
   if (loading) {
     return (
@@ -221,7 +223,7 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <DataTable tableId="subject-tasks" clientPagination
+            <DataTable onEditRow={canEdit ? (row) => router.push(`/${locale}/tasks/${row.id}`) : undefined} bulkActions={canEdit ? [{ label: "Publikovat vybrané", onApply: async (ids) => { await mutateAdminRows("tasks", ids, "PUBLISHED"); await fetchSubject(id); } }, { label: "Uzavřít vybrané", onApply: async (ids) => { await mutateAdminRows("tasks", ids, "CLOSED"); await fetchSubject(id); } }, { label: "Vrátit do konceptu", onApply: async (ids) => { await mutateAdminRows("tasks", ids, "DRAFT"); await fetchSubject(id); } }] : undefined} canManageRow={(row) => row.canManage} tableId="subject-tasks" clientPagination
               onDeleteRows={canEdit ? async (ids) => { await mutateAdminRows("tasks", ids); await fetchSubject(id); } : undefined}
               data={filteredTasks}
               columns={taskColumns}

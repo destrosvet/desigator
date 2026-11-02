@@ -15,7 +15,7 @@ type User = {
 };
 const roleLabels = { ADMIN: "Administrátor", SCHOOL_ADMIN: "Správce školy", TEACHER: "Učitel", EVALUATOR: "Hodnotitel", STUDENT: "Student" };
 
-export function UserDetail({ user, self }: { user: User; self: boolean }) {
+export function UserDetail({ user, self, admin = true }: { user: User; self: boolean; admin?: boolean }) {
   const router = useRouter();
   const [values, setValues] = useState({ name: user.name, email: user.email, institution: user.institution || "", externalId: user.externalId || "", roles: user.roles, isActive: user.isActive });
   const [busy, setBusy] = useState(false);
@@ -39,9 +39,9 @@ export function UserDetail({ user, self }: { user: User; self: boolean }) {
         <form onSubmit={(event) => void save(event)} className="space-y-6">
           <fieldset disabled={busy} className="space-y-5">
             {([{ key: "name", label: "Jméno", type: "text" }, { key: "email", label: "E-mail", type: "email" }, { key: "externalId", label: "Školní ID", type: "text" }, { key: "institution", label: "Instituce v profilu", type: "text" }] as const).map(({ key, label, type }) => <div key={key} className="space-y-2"><Label htmlFor={`user-${key}`}>{label}</Label><Input id={`user-${key}`} type={type} value={values[key]} required={key === "name" || key === "email"} minLength={key === "name" ? 2 : undefined} maxLength={key === "email" ? 254 : 200} onChange={(event) => setValues((old) => ({ ...old, [key]: event.target.value }))} /></div>)}
-            <div className="space-y-2"><p className="text-sm font-medium">Organizace</p>{user.organizationId ? <Link className="text-primary underline" href={`/settings/organizations/${encodeURIComponent(user.organizationId)}`}>{user.organization?.name}</Link> : <p className="text-sm">Bez organizace</p>}</div>
-            <fieldset className="space-y-3"><legend className="mb-3 text-sm font-medium">Oprávnění</legend>{Object.entries(roleLabels).map(([role, label]) => <label key={role} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={values.roles.includes(role)} disabled={self && role === "ADMIN" || (user.roles.includes("STUDENT") ? role !== "STUDENT" : role === "STUDENT") || !user.organizationId && ["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(role)} onChange={(event) => setValues((old) => ({ ...old, roles: event.target.checked ? [...old.roles, role] : old.roles.filter((item) => item !== role) }))} />{label}</label>)}</fieldset>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={values.isActive} disabled={self} onChange={(event) => setValues((old) => ({ ...old, isActive: event.target.checked }))} />Aktivní účet</label>
+            <div className="space-y-2"><p className="text-sm font-medium">Organizace</p>{user.organizationId && admin ? <Link className="text-primary underline" href={`/settings/organizations/${encodeURIComponent(user.organizationId)}`}>{user.organization?.name}</Link> : <p className="text-sm">{user.organization?.name || "Bez organizace"}</p>}</div>
+            <fieldset className="space-y-3"><legend className="mb-3 text-sm font-medium">Oprávnění</legend>{Object.entries(roleLabels).map(([role, label]) => <label key={role} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={values.roles.includes(role)} disabled={!admin || self && role === "ADMIN" || (user.roles.includes("STUDENT") ? role !== "STUDENT" : role === "STUDENT") || !user.organizationId && ["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(role)} onChange={(event) => setValues((old) => ({ ...old, roles: event.target.checked ? [...old.roles, role] : old.roles.filter((item) => item !== role) }))} />{label}</label>)}</fieldset>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={values.isActive} disabled={self || !admin} onChange={(event) => setValues((old) => ({ ...old, isActive: event.target.checked }))} />Aktivní účet</label>
           </fieldset>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{message && <p role="status" className="text-sm">{message}</p>}
           <Button disabled={busy || !values.roles.length}>{busy ? "Ukládání…" : "Uložit změny"}</Button>

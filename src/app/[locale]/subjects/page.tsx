@@ -1,5 +1,6 @@
 "use client";
 import type { TableSort } from "@/lib/table-sorting";
+import { activeField, semesterField } from "@/lib/table-management";
 import { mutateAdminRows } from "@/lib/admin-client";
 
 
@@ -26,6 +27,7 @@ interface ClassOption {
 }
 
 interface Subject {
+  canManage: boolean;
   id: string;
   code: string;
   name: string;
@@ -183,7 +185,7 @@ export default function SubjectsPage() {
   ];
 
   const actions = (s: Subject) => [
-    { label: "Upravit", onClick: () => router.push(`/${locale}/subjects/${s.id}`) },
+    { label: "Otevřít", onClick: () => router.push(`/${locale}/subjects/${s.id}`) },
     { label: "Tasky", onClick: () => router.push(`/subjects/${s.id}/tasks`) },
   ];
 
@@ -247,7 +249,7 @@ export default function SubjectsPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <DataTable tableId="subjects" sort={sort} onSortChange={setSort}
+            <DataTable onEditRow={canCreate ? (row) => router.push(`/${locale}/subjects/${row.id}`) : undefined} management={canCreate ? { entity: "subjects", fields: [semesterField, { key: "year", label: "Rok", type: "number" }, { ...activeField, label: "Stav předmětu" }], onSaved: fetchSubjects } : undefined} canManageRow={(row) => row.canManage} tableId="subjects" sort={sort} onSortChange={setSort}
               onDeleteRows={canCreate ? async (ids) => { await mutateAdminRows("subjects", ids); await fetchSubjects(); } : undefined}
               data={subjects}
               columns={columns}

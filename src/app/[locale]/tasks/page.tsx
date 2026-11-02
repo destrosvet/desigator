@@ -26,6 +26,7 @@ interface SubjectOption {
 }
 
 interface Task {
+  canManage: boolean;
   id: string;
   title: string;
   description: string | null;
@@ -174,8 +175,8 @@ export default function TasksPage() {
   ];
 
   const actions = (task: Task) => {
-    const items = [{ label: "Upravit", onClick: () => router.push(`/${locale}/tasks/${task.id}`) }];
-    if (canCreate) items.push({ label: "Duplikovat", onClick: () => handleDuplicate(task.id) });
+    const items = [{ label: "Otevřít", onClick: () => router.push(`/${locale}/tasks/${task.id}`) }];
+    if (canCreate && task.canManage) items.push({ label: "Duplikovat", onClick: () => handleDuplicate(task.id) });
     return items;
   };
 
@@ -230,7 +231,7 @@ export default function TasksPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <DataTable tableId="tasks" sort={sort} onSortChange={setSort}
+            <DataTable onEditRow={canCreate ? (row) => router.push(`/${locale}/tasks/${row.id}`) : undefined} canManageRow={(row) => row.canManage} tableId="tasks" sort={sort} onSortChange={setSort}
               onDeleteRows={canCreate ? async (ids) => { await mutateAdminRows("tasks", ids); await fetchTasks(); } : undefined}
               bulkActions={canCreate ? [
                 { label: "Publikovat vybrané", onApply: async (ids: string[]) => { await mutateAdminRows("tasks", ids, "PUBLISHED"); await fetchTasks(); } },

@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailSchema } from "@/lib/password-policy";
 import { isAdmin } from "@/lib/permissions";
+import { studentScope } from "@/lib/admin-records";
 
 const creatableRole = z.enum(["STUDENT", "TEACHER", "EVALUATOR"]);
 const createUserSchema = z.object({
@@ -66,7 +67,9 @@ export async function GET(req: Request) {
     }),
   ]);
 
-  return NextResponse.json({ users, total, page, limit, organizations }, { headers: { "Cache-Control": "no-store" } });
+  const editable = admin ? users : await db.user.findMany({ where: { AND: [{ id: { in: users.map((user) => user.id) } }, studentScope(session.user)] }, select: { id: true } });
+  const editableIds = new Set(editable.map((user) => user.id));
+  return NextResponse.json({ users: users.map((user) => ({ ...user, canManage: editableIds.has(user.id) })), total, page, limit, organizations }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(req: Request) {

@@ -20,7 +20,7 @@ function SettingsContent() {
   const roles = useTranslations("roles");
   const params = useSearchParams(); const pathname = usePathname(); const router = useRouter();
   const user = session?.user; const admin = user ? isAdmin(user) : false;
-  const templates = user ? showPersonalTemplates(user) : false;
+  const templates = admin || (user ? showPersonalTemplates(user) : false);
   const school = user ? showSchoolWorkspace(user) : false;
   const sections = [
     ...(admin ? [{ id: "organizations", label: "Organizace", icon: Building2 }] : []),

@@ -4,7 +4,8 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailSchema } from "@/lib/password-policy";
-import { isAdmin, primaryRole, rolesOf } from "@/lib/permissions";
+import { canTeach, isAdmin, primaryRole, rolesOf } from "@/lib/permissions";
+import { studentScope } from "@/lib/admin-records";
 import { OrganizationError } from "@/lib/organizations";
 import type { UserRole } from "@prisma/client";
 
@@ -20,7 +21,7 @@ const schema = z.object({
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session || !isAdmin(session.user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session || !canTeach(session.user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const input = schema.parse(await req.json());
     const { id } = await params;
@@ -28,9 +29,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       // Serialize platform administrator edits, including concurrent deactivations.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(194728103)`;
       const actor = await tx.user.findUnique({ where: { id: session.user.id } });
-      if (!actor?.isActive || !isAdmin(actor)) throw new OrganizationError("Oprávnění se změnila.", 403);
+      if (!actor?.isActive || !canTeach(actor)) throw new OrganizationError("Oprávnění se změnila.", 403);
       const user = await tx.user.findUnique({ where: { id } });
       if (!user) throw new OrganizationError("Uživatel nebyl nalezen.", 404);
+      if (!isAdmin(actor)) {
+        if (!await tx.user.findFirst({ where: { AND: [{ id }, studentScope(actor)] }, select: { id: true } })) throw new OrganizationError("K tomuto účtu nemáte oprávnění.", 403);
+        if (input.isActive !== user.isActive || JSON.stringify(input.roles.slice().sort()) !== JSON.stringify(rolesOf(user).slice().sort())) throw new OrganizationError("Nemůžete měnit oprávnění ani stav účtu.", 403);
+        await tx.user.update({ where: { id }, data: { name: input.name, email: input.email, institution: input.institution || null, externalId: input.externalId || null } });
+        return;
+      }
       if (user.organizationId) await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId} FOR UPDATE`;
       if (id === actor.id && (!input.isActive || !input.roles.includes("ADMIN"))) throw new OrganizationError("Vlastní účet nelze deaktivovat ani mu odebrat správu platformy.");
       if (!user.organizationId && input.roles.some((role) => ["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(role))) throw new OrganizationError("Tato oprávnění vyžadují členství v organizaci.");

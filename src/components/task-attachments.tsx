@@ -56,7 +56,7 @@ export function TaskAttachments({ taskId, canManage = false }: { taskId: string;
     </form>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {message && <p role="status" className="text-sm">{message}</p>}
-    {loading ? <p className="text-sm">Načítání příloh…</p> : files.length ? <DataTable tableId="task-attachments" clientPagination data={filtered} total={filtered.length} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} rowLabel={(row) => row.originalName} searchPlaceholder="Vyhledat přílohu…" columns={[
+    {loading ? <p className="text-sm">Načítání příloh…</p> : files.length ? <DataTable management={canManage ? { entity: "attachments", contextId: taskId, fields: [{ key: "originalName", label: "Název souboru" }], onSaved: load } : undefined} tableId="task-attachments" clientPagination data={filtered} total={filtered.length} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} rowLabel={(row) => row.originalName} searchPlaceholder="Vyhledat přílohu…" columns={[
       { key: "originalName", label: "Soubor", render: (row: Attachment) => <a className="underline" href={attachmentUrl(row.id)}>{row.originalName}</a> },
       { key: "mimeType", label: "Formát" },
       { key: "size", label: "Velikost", render: (row: Attachment) => (row.size / 1024 / 1024).toLocaleString("cs", { maximumFractionDigits: 2 }) + " MB" },

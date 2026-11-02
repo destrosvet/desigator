@@ -10,6 +10,7 @@ import { canTeach } from "@/lib/permissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StudentEditor } from "@/components/student-editor";
+import { activeField, institutionField } from "@/lib/table-management";
 import { mutateAdminRows } from "@/lib/admin-client";
 import { DataTable } from "@/components/data-table";
 import { FilterConfig } from "@/components/data-filters";
@@ -139,7 +140,7 @@ export function StudentList({ fixedClassId, fixedClassName, refreshVersion = 0 }
         {message ? <p role="status" className="text-sm">{message}</p> : null}
         <Card>
           <CardContent className="pt-6">
-            <DataTable selectionVersion={revision} tableId="students" sort={sort} onSortChange={setSort}
+            <DataTable selectionVersion={revision} onEditRow={canManage ? setEditing : undefined} management={canManage ? { entity: "students", fields: [institutionField, ...(session?.user.role === "ADMIN" ? [activeField] : [])], onSaved: fetchStudents } : undefined} tableId="students" sort={sort} onSortChange={setSort}
               data={students}
               columns={columns}
               total={total}

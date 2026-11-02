@@ -76,7 +76,7 @@ export async function GET(req: Request) {
     const summaries = tasks.map(({ submissions, ...task }) => {
       const canSeeRoster = isAdmin(session.user) || (task.subject.classes[0]?.class.organizationId === session.user.organizationId && (isSchoolAdmin(session.user) || task.creatorId === session.user.id));
       const studentCount = canSeeRoster ? new Set(task.subject.classes.flatMap((link) => link.class.students.map((member) => member.studentId))).size : submissions.length;
-      return { ...task, subject: { ...task.subject, class: { name: task.subject.classes.map((link) => link.class.name).join(", ") } }, submissionCount: submissions.length, studentCount };
+      return { ...task, canManage: canSeeRoster, subject: { ...task.subject, class: { name: task.subject.classes.map((link) => link.class.name).join(", ") } }, submissionCount: submissions.length, studentCount };
     });
     const ordered = computedSort ? sortTableRows(summaries, sorting, (row) => row.submissionCount).slice(skip, skip + limit) : summaries;
     return NextResponse.json({ tasks: ordered, total, page, limit });
