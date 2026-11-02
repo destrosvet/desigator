@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useParams, useRouter } from "next/navigation";
+import { Link } from "@/components/navigation";
 import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +29,8 @@ const roleLabels: Record<string, string> = {
 
 export function UserManagement() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const { locale } = useParams<{ locale: string }>();
   const admin = session?.user.role === "ADMIN";
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -96,8 +100,8 @@ export function UserManagement() {
     </header>
     {error && !createOpen ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p> : null}
     <Card><CardHeader><CardTitle>Seznam uživatelů</CardTitle><CardDescription>{loading ? "Načítání…" : `Celkem ${total} účtů v dostupném rozsahu.`}</CardDescription></CardHeader><CardContent>
-      <DataTable tableId="user-management" data={users} total={total} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Hledat jméno nebo e-mail…" columns={[
-        { key: "name", label: "Jméno", render: (user: ManagedUser) => <span className="font-medium">{user.name}</span> },
+      <DataTable onRowClick={admin ? (user) => router.push(`/${locale}/users/${encodeURIComponent(user.id)}`) : undefined} tableId="user-management" data={users} total={total} page={page} limit={limit} onPageChange={setPage} onLimitChange={setLimit} onSearch={setSearch} searchPlaceholder="Hledat jméno nebo e-mail…" columns={[
+        { key: "name", label: "Jméno", render: (user: ManagedUser) => admin ? <Link href={`/users/${encodeURIComponent(user.id)}`} className="font-medium hover:underline" onClick={(event) => event.stopPropagation()}>{user.name}</Link> : <span className="font-medium">{user.name}</span> },
         { key: "email", label: "E-mail" },
         { key: "roles", label: "Oprávnění", render: (user: ManagedUser) => <span>{rolesOf(user).map((item) => roleLabels[item] || item).join(", ")}</span> },
         { key: "organization", label: "Organizace", render: (user: ManagedUser) => user.organization?.name || <span className="text-muted-foreground">Externí</span> },
