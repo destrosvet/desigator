@@ -12,6 +12,7 @@ import {
   Settings,
   GraduationCap,
   ChartColumn,
+  UserRoundCog,
   Menu,
   ChevronRight,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/subjects", icon: BookOpen, label: "navigation.subjects", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
   { href: "/tasks", icon: ClipboardList, label: "navigation.tasks", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
   { href: "/students", icon: Users, label: "navigation.students", roles: ["ADMIN", "TEACHER"] },
+  { href: "/users", icon: UserRoundCog, label: "navigation.users", roles: ["ADMIN", "TEACHER"] },
   { href: "/evaluations", icon: GraduationCap, label: "navigation.evaluations", roles: ["ADMIN", "TEACHER", "EVALUATOR"] },
   { href: "/statistics", icon: ChartColumn, label: "navigation.statistics", roles: ["ADMIN", "TEACHER"] },
   { href: "/settings", icon: Settings, label: "navigation.settings", roles: ["ADMIN", "TEACHER", "EVALUATOR", "STUDENT"] },
