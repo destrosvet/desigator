@@ -8,7 +8,7 @@ async function main() {
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password || !emailSchema.safeParse(email).success || !newPasswordSchema.safeParse(password).success) {
-    throw new Error("Set a valid ADMIN_EMAIL and ADMIN_PASSWORD (12 characters minimum, 72 UTF-8 bytes maximum).");
+    throw new Error("Set a valid ADMIN_EMAIL and ADMIN_PASSWORD (8 characters minimum, 72 UTF-8 bytes maximum).");
   }
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) throw new Error("Account already exists; it has not been modified.");

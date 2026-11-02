@@ -97,14 +97,14 @@ export default function RegisterPage() {
               <Input
                 id="password"
                 type="password"
-                minLength={12}
+                minLength={8}
                 maxLength={72}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
-            <p className="text-xs text-muted-foreground">{locale === "en" ? "Use at least 12 characters. Registration must be confirmed by email." : "Heslo musí mít alespoň 12 znaků. Registraci je nutné potvrdit e-mailem."}</p>
+            <p className="text-xs text-muted-foreground">{locale === "en" ? "Use at least 8 characters. Registration must be confirmed by email." : "Heslo musí mít alespoň 8 znaků. Registraci je nutné potvrdit e-mailem."}</p>
             <Button type="submit" className="w-full" disabled={loading || success}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("submit")}

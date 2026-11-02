@@ -132,7 +132,7 @@
     "forgotTitle": "Zapomenuté heslo",
     "resetTitle": "Nastavit nové heslo",
     "forgotLink": "Zapomněli jste heslo?",
-    "description": "Nové heslo musí mít alespoň 12 znaků a nejvýše 72 bajtů. Po změně se odhlásíte ze všech zařízení.",
+    "description": "Nové heslo musí mít alespoň 8 znaků a nejvýše 72 bajtů. Po změně se odhlásíte ze všech zařízení.",
     "forgotDescription": "Zadejte e-mail svého účtu. Pokud je účet aktivní, pošleme vám jednorázový odkaz platný 30 minut.",
     "email": "E-mail",
     "currentPassword": "Současné heslo",
@@ -147,7 +147,7 @@
     "passwordReset": "Heslo bylo změněno. Přihlaste se novým heslem.",
     "errors": {
       "mismatch": "Zadaná hesla se neshodují.",
-      "invalidInput": "Zkontrolujte údaje. Nové heslo musí mít alespoň 12 znaků a nejvýše 72 bajtů.",
+      "invalidInput": "Zkontrolujte údaje. Nové heslo musí mít alespoň 8 znaků a nejvýše 72 bajtů.",
       "invalidToken": "Odkaz je neplatný, použitý nebo vypršel. Vyžádejte si nový.",
       "wrongPassword": "Současné heslo není správné.",
       "samePassword": "Nové heslo se musí lišit od současného.",

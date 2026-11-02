@@ -44,8 +44,8 @@ export function PasswordForm({ mode }: { mode: Mode }) {
       <fieldset disabled={busy} className="space-y-4">
         {mode === "forgot" ? <div className="space-y-2"><Label htmlFor="recovery-email">{t("email")}</Label><Input id="recovery-email" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} required /></div> : <>
           {mode === "change" ? <div className="space-y-2"><Label htmlFor="current-password">{t("currentPassword")}</Label><Input id="current-password" type="password" autoComplete="current-password" maxLength={1024} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></div> : null}
-          <div className="space-y-2"><Label htmlFor="new-password">{t("newPassword")}</Label><Input id="new-password" type="password" autoComplete="new-password" minLength={12} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
-          <div className="space-y-2"><Label htmlFor="confirm-password">{t("confirmPassword")}</Label><Input id="confirm-password" type="password" autoComplete="new-password" minLength={12} maxLength={72} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="new-password">{t("newPassword")}</Label><Input id="new-password" type="password" autoComplete="new-password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="confirm-password">{t("confirmPassword")}</Label><Input id="confirm-password" type="password" autoComplete="new-password" minLength={8} maxLength={72} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></div>
         </>}
         <Button type="submit">{busy ? t("busy") : t(mode + "Submit")}</Button>
       </fieldset>

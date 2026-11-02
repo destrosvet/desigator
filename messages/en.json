@@ -132,7 +132,7 @@
     "forgotTitle": "Forgot password",
     "resetTitle": "Set a new password",
     "forgotLink": "Forgot your password?",
-    "description": "Use at least 12 characters and no more than 72 UTF-8 bytes. Changing your password signs you out on all devices.",
+    "description": "Use at least 8 characters and no more than 72 UTF-8 bytes. Changing your password signs you out on all devices.",
     "forgotDescription": "Enter your account email. If the account is active, we will send a single-use link valid for 30 minutes.",
     "email": "Email",
     "currentPassword": "Current password",
@@ -147,7 +147,7 @@
     "passwordReset": "Your password has been changed. Sign in with your new password.",
     "errors": {
       "mismatch": "The passwords do not match.",
-      "invalidInput": "Check your details. Use at least 12 characters and no more than 72 UTF-8 bytes for the new password.",
+      "invalidInput": "Check your details. Use at least 8 characters and no more than 72 UTF-8 bytes for the new password.",
       "invalidToken": "This link is invalid, used or expired. Request a new one.",
       "wrongPassword": "The current password is incorrect.",
       "samePassword": "The new password must differ from the current password.",

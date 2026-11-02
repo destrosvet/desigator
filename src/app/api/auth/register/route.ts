@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     catch { return NextResponse.json({ error: "Účet čeká na ověření, ale e-mail se nepodařilo odeslat. Použijte opětovné odeslání ověřovacího e-mailu.", verificationRequired: true }, { status: 503 }); }
     return NextResponse.json({ verificationRequired: true }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error instanceof z.ZodError) return NextResponse.json({ error: "Zkontrolujte jméno, e-mail a heslo (alespoň 12 znaků, nejvýše 72 UTF-8 bajtů)." }, { status: 400 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Zkontrolujte jméno, e-mail a heslo (alespoň 8 znaků, nejvýše 72 UTF-8 bajtů)." }, { status: 400 });
     if ((error as { code?: string }).code === "P2002") return NextResponse.json({ error: "Účet s tímto e-mailem již existuje." }, { status: 409 });
     return NextResponse.json({ error: "Registrace selhala." }, { status: 500 });
   }

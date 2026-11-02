@@ -32,7 +32,7 @@ Objekty S3 zálohujte a obnovujte do samostatného privátního bucketu, např. 
 
 ## První správce
 
-Na čisté DB použijte z ověřeného checkoutu prisma/create-admin.ts přes npm run db:admin. Přístupové údaje dodejte chráněnými proměnnými ADMIN_EMAIL, ADMIN_PASSWORD a případně ADMIN_NAME. Heslo musí mít alespoň 12 znaků a nejvýše 72 UTF-8 bajtů. Příkaz existující účet nepřepíše a heslo nevypisuje. Provede se pouze jednou; nepoužívejte výchozí demo účty.
+Na čisté DB použijte z ověřeného checkoutu prisma/create-admin.ts přes npm run db:admin. Přístupové údaje dodejte chráněnými proměnnými ADMIN_EMAIL, ADMIN_PASSWORD a případně ADMIN_NAME. Heslo musí mít alespoň 8 znaků a nejvýše 72 UTF-8 bajtů. Příkaz existující účet nepřepíše a heslo nevypisuje. Provede se pouze jednou; nepoužívejte výchozí demo účty.
 
 ## Kontrola po startu a návrat
 
