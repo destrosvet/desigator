@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 test.skip(process.env.E2E_ORGANIZATIONS !== "true", "Requires an isolated organization test database");
 async function registerAndLogin(page: Page, email: string) {
-  const response = await page.request.post("/api/auth/register", { data: { name: email.split("@")[0], email, password: "OrganizationTest123!" } });
+  const response = await page.request.post("/api/auth/register", { headers: { "x-forwarded-for": "e2e-" + email }, data: { name: email.split("@")[0], email, password: "OrganizationTest123!" } });
   expect(response.status()).toBe(201);
   const user = (await response.json()).user;
   await page.goto("/cs/auth/login");
