@@ -119,10 +119,29 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || document.fullscreenElement) return;
+      if (event.defaultPrevented || event.repeat || event.isComposing) return;
+      const command = event.ctrlKey || event.metaKey;
+      if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "s") {
+        event.preventDefault(); event.stopPropagation(); void persist("draft"); return;
+      }
+      const index = initialQueue.findIndex((item) => item.id === formRef.current.id);
+      if (command && !event.altKey && !event.shiftKey && event.key === "Enter") {
+        event.preventDefault(); event.stopPropagation();
+        if (!isFullyRated(formRef.current)) { void persist("complete"); return; }
+        const next = initialQueue[index + 1];
+        if (next) void goTo(next.id); else void persist("complete");
+        return;
+      }
+      if (command || event.shiftKey || document.fullscreenElement) return;
+      if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        event.preventDefault(); event.stopPropagation();
+        const next = initialQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
+        if (next) void goTo(next.id);
+        return;
+      }
+      if (event.altKey) return;
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [role="slider"], [role="combobox"]')) return;
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      const index = initialQueue.findIndex((item) => item.id === formRef.current.id);
       const next = initialQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
       if (next) { event.preventDefault(); void goTo(next.id); }
     };
@@ -136,14 +155,14 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       if (formRef.current.revision === formRef.current.savedRevision && !(formRef.current.status !== "COMPLETED" && isFullyRated(formRef.current))) return;
       event.preventDefault(); event.stopImmediatePropagation(); void leave(url.pathname + url.search);
     };
-    window.addEventListener("keydown", keydown);
+    window.addEventListener("keydown", keydown, true);
     window.addEventListener("beforeunload", beforeUnload);
     document.addEventListener("click", click, true);
     return () => {
-      window.removeEventListener("keydown", keydown); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", click, true);
+      window.removeEventListener("keydown", keydown, true); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", click, true);
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [goTo, initialQueue, leave]);
+  }, [goTo, initialQueue, leave, persist]);
 
   return { work, queue, form, saving, navigating, error, message, change, persist, goTo, leave, fullyRated: isFullyRated(form) };
 }

@@ -41,7 +41,13 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const auth = await authorize(id);
   if (auth.response) return auth.response;
 
-  const { studentId } = schema.parse(await req.json());
-  await db.classStudent.deleteMany({ where: { classId: id, studentId } });
-  return NextResponse.json({ success: true });
+  try {
+    const body = z.union([schema, z.object({ studentIds: z.array(z.string().min(1)).min(1).max(200) })]).parse(await req.json());
+    const studentIds = "studentIds" in body ? body.studentIds : [body.studentId];
+    await db.classStudent.deleteMany({ where: { classId: id, studentId: { in: studentIds } } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: "Failed to remove students" }, { status: 500 });
+  }
 }

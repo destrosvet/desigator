@@ -52,7 +52,7 @@ export async function GET(req: Request) {
           classMemberships: {
             where: session.user.role === "ADMIN" ? {} : { class: { organizationId: session.user.organizationId || "__no_organization__", ...(session.user.roles?.includes("SCHOOL_ADMIN") ? {} : { teacherId: session.user.id }) } },
             include: {
-              class: { select: { name: true } },
+              class: { select: { id: true, name: true } },
             },
           },
         },

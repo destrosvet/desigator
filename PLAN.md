@@ -1,5 +1,15 @@
 # Plán dokončení Desigatoru
 
+## Přesun studentů mezi třídami — 26. 10. 2026
+
+- [x] Stránka Studenti a správa studentů v detailu třídy používají společnou komponentu StudentList. Detail má pevný filtr classId; původní samostatný výpis a výběr z až 500 kandidátů jsou odstraněné.
+- [x] Hromadný přesun vybraných studentů i přesun jednoho studenta z menu řádku. Při aktivním filtru třídy je původní skupina předvybraná; jinak se volí společná původní skupina. Potvrzovací dialog ukazuje studenty a obě skupiny, má CS/EN a zachová výběr při chybě.
+- [x] Server kontroluje správu obou aktivních skupin a jejich stejnou školu. Celá dávka 1–200 studentů se přesune v transakci se zámky a bez duplicit cílového členství. Změněné členství nebo neplatný student odmítne celou dávku.
+- [x] Účty, ostatní členství, práce, hodnocení a korekce zůstávají zachované. Historické práce zůstávají při původních zadáních a předmětech; nepřevádějí se do jiné výuky.
+- [x] Odebrání v detailu třídy ruší pouze členství, jednotlivě i hromadně. Mazání účtů je nadále samostatná akce hlavního seznamu. Import i změna členství obnovují společnou tabulku.
+- Ověřeno: 311 unit/API testů (včetně 26 nových kontrol přesunu a odebrání), TypeScript, cílený lint a produkční build. Lokální Chromium se synteticky nahrazenými API ověřilo desktop/mobil, zrušení, konflikt, opakování, odeslanou dávku a obnovení seznamu bez chyb stránky.
+- Přidaný databázový E2E scénář tests/e2e/student-transfer.spec.ts je součástí standardní CI sady; lokálně nebyl spuštěn, protože Docker/PostgreSQL není dostupný. Produkční data ani Coolify nebyly touto úpravou změněny. Migrace schématu není potřeba.
+
 ## Aktuální stav — 25. 10. 2026
 
 Tento souhrn nahrazuje starší priority a checkboxy níže. Historické záznamy jsou ponechané jako evidence vývoje.
