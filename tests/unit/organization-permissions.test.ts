@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 import { isAdmin, isSchoolAdmin, hasRole, primaryRole, canEvaluate, hasSchoolMembership, showSchoolWorkspace, showPersonalTemplates } from "@/lib/permissions";
-import { managedClassScope, managedTaskScope, visibleTaskScope } from "@/lib/authorization";
+import { managedClassScope, managedTaskScope, visibleTaskScope, visibleSubjectScope } from "@/lib/authorization";
 import { evaluationScope } from "@/lib/evaluations";
 import { schoolRolesSchema } from "@/lib/organizations";
 import { planStudentImport } from "@/lib/student-import";
@@ -36,6 +36,11 @@ describe("school permissions", () => {
   it("adds assigned cross-school works to teachers' visibility", () => {
     expect(JSON.stringify(visibleTaskScope(combined))).toContain('"evaluatorId":"teacher"');
     expect(JSON.stringify(evaluationScope(combined))).toContain('"evaluatorId":"teacher"');
+  });
+  it("adds assigned subjects and published tasks without granting cross-school management", () => {
+    expect(visibleSubjectScope(combined).OR).toContainEqual({ evaluators: { some: { evaluatorId: combined.id } } });
+    expect(visibleTaskScope(combined).OR).toContainEqual({ status: { in: ["PUBLISHED", "CLOSED"] }, subject: { evaluators: { some: { evaluatorId: combined.id } } } });
+    expect(managedTaskScope({ id: "external", role: "EVALUATOR" })).toEqual({ id: { in: [] } });
   });
   it("uses the explicit role array as authority and permits a standalone school administrator", () => {
     const admin = { ...combined, role: "ADMIN", roles: ["SCHOOL_ADMIN"] };

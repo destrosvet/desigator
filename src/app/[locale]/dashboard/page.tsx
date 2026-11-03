@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, ClipboardList, GraduationCap, BookOpen, ListChecks } from "lucide-react";
 import Link from "next/link";
-import { canCreateOrganization, isAdmin } from "@/lib/permissions";
+import { canCreateOrganization, canEvaluate, isAdmin } from "@/lib/permissions";
 
 export default async function DashboardPage({ params }: { params: Promise<{ locale: string }> }) {
  const { locale } = await params;
@@ -21,6 +21,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ loca
  const date = (value: Date) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(value);
  return <AppShell><div className="space-y-6">
   <header><h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1><p className="mt-1 text-muted-foreground">{t("welcome", { name: session.user.name || "" })}</p></header>
+  {canEvaluate(session.user) ? <Button asChild><Link href={`/${locale}/evaluations`}><ListChecks className="size-4" />Předměty a zbývající hodnocení</Link></Button> : null}
   {!session.user.organizationId && !isAdmin(session.user) && <Card><CardHeader><CardTitle>{canCreateOrganization(session.user) ? "Vaše oprávnění byla schválena" : "Váš účet je připravený"}</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm text-muted-foreground">{canCreateOrganization(session.user) ? "Nyní můžete založit vlastní školu nebo přijmout pozvánku do existující organizace." : "Do školy se připojíte pozvánkou. Pokud chcete vyučovat nebo spravovat školu, požádejte administrátora o vyšší oprávnění."}</p><Button asChild><Link href={canCreateOrganization(session.user) ? `/${locale}/settings?section=school` : `/${locale}/settings?section=access`}>{canCreateOrganization(session.user) ? "Založit školu" : "Požádat o vyšší oprávnění"}</Link></Button></CardContent></Card>}
   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{titles.map((title, index) => { const Icon = icons[index]; return <Card key={title}><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">{title}</CardTitle><Icon className="size-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{data.counts[index]}</div></CardContent></Card>; })}</div>
   <div className="grid gap-4 lg:grid-cols-2">

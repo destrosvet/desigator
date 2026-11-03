@@ -26,12 +26,12 @@ export function visibleClassScope(user: AuthUser): Prisma.ClassWhereInput {
 export function visibleSubjectScope(user: AuthUser): Prisma.SubjectWhereInput {
   if (isAdmin(user)) return {};
   return { OR: [managedSubjectScope(user), ...(hasRole(user, "STUDENT") ? [{ classes: { some: { class: { organizationId: schoolId(user), students: { some: { studentId: user.id } } } } } }] : []),
-    ...(canEvaluate(user) ? [{ tasks: { some: { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } } } }] : [])] };
+    ...(canEvaluate(user) ? [{ evaluators: { some: { evaluatorId: user.id } } }, { tasks: { some: { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } } } }] : [])] };
 }
 export function visibleTaskScope(user: AuthUser): Prisma.TaskWhereInput {
   if (isAdmin(user)) return {};
   return { OR: [managedTaskScope(user), ...(hasRole(user, "STUDENT") ? [{ status: { in: ["PUBLISHED", "CLOSED"] as ("PUBLISHED" | "CLOSED")[] }, subject: { classes: { some: { class: { organizationId: schoolId(user), students: { some: { studentId: user.id } } } } } } }] : []),
-    ...(canEvaluate(user) ? [{ submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } }] : [])] };
+    ...(canEvaluate(user) ? [{ status: { in: ["PUBLISHED", "CLOSED"] as ("PUBLISHED" | "CLOSED")[] }, subject: { evaluators: { some: { evaluatorId: user.id } } } }, { submissions: { some: { evaluations: { some: { evaluatorId: user.id } } } } }] : [])] };
 }
 export async function canManageClass(user: AuthUser, id: string): Promise<boolean> {
   if (!isAdmin(user) && !canTeach(user)) return false;

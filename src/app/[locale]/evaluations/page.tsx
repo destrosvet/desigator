@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { syncSubjectEvaluations } from "@/lib/subject-evaluators";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { evaluationQuerySchema, evaluationScope, listEvaluations } from "@/lib/evaluations";
@@ -6,7 +7,7 @@ import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { EvaluationGallery } from "@/components/evaluation-gallery";
 import { Link } from "@/components/navigation";
-import { anonymousEvaluation } from "@/lib/permissions";
+import { anonymousEvaluation, canEvaluate } from "@/lib/permissions";
 import { canManageTask } from "@/lib/authorization";
 import { readTaskPublication } from "@/lib/task-result-publication";
 
@@ -17,13 +18,14 @@ export default async function EvaluationsPage({ params, searchParams }: {
   const { locale } = await params;
   const session = await getServerSession(authOptions);
   if (!session) redirect(`/${locale}/auth/login`);
+  await syncSubjectEvaluations(session.user);
   const raw = await searchParams;
   const normalized = Object.fromEntries(Object.entries(raw).filter(([, value]) => typeof value === "string" && value !== ""));
   const parsed = evaluationQuerySchema.safeParse(normalized);
   if (!parsed.success) return <AppShell><div role="alert">Neplatné filtry. <Link href="/evaluations">Obnovit přehled</Link></div></AppShell>;
   const scope = evaluationScope(session.user);
   const tasks = await db.task.findMany({
-    where: { submissions: { some: { evaluations: { some: scope } } } },
+    where: { OR: [{ submissions: { some: { evaluations: { some: scope } } } }, ...(canEvaluate(session.user) ? [{ status: { in: ["PUBLISHED", "CLOSED"] as ("PUBLISHED" | "CLOSED")[] }, subject: { isActive: true, evaluators: { some: { evaluatorId: session.user.id } } } }] : [])] },
     select: { id: true, title: true, subject: { select: { id: true, name: true, year: true, classes: { select: { class: { select: { name: true } } } } } }, submissions: { where: { evaluations: { some: scope } }, select: { evaluations: { where: scope, select: { status: true } } } } },
     orderBy: { title: "asc" },
   });

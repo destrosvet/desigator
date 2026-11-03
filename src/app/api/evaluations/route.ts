@@ -1,4 +1,5 @@
 import { requireUnpublishedResults, PublishedResultsError } from "@/lib/result-publication";
+import { syncSubjectEvaluations } from "@/lib/subject-evaluators";
 import { managedTaskScope } from "@/lib/authorization";
 import { rubricError } from "@/lib/task-validation";
 import { NextResponse } from "next/server";
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
   const parsed = evaluationQuerySchema.safeParse(params);
   if (!parsed.success) return NextResponse.json({ error: "Invalid evaluation filters" }, { status: 400 });
   try {
+    await syncSubjectEvaluations(session.user);
     return NextResponse.json(await listEvaluations(session.user, parsed.data), { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Failed to fetch evaluations" }, { status: 500 });

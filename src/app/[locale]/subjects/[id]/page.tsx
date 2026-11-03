@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SubjectEvaluators } from "@/components/subject-evaluators";
 import { mutateAdminRows } from "@/lib/admin-client";
 import { useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -172,6 +173,7 @@ export default function SubjectDetailPage({ params }: { params: Promise<{ id: st
 
         <Button variant="outline" onClick={() => router.push(`/${locale}/subjects/${id}/results`)}><ClipboardList className="size-4" />Přehled výsledků a známek</Button>
 
+        {canEdit ? <SubjectEvaluators subjectId={id} /> : null}
         <Card>
           <CardHeader><CardTitle>Detail předmětu</CardTitle></CardHeader>
           <CardContent className="space-y-4">

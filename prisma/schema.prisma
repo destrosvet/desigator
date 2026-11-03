@@ -92,6 +92,7 @@ model User {
 
   // Hodnotitel: přiřazené evaluace
   evaluations Evaluation[] @relation("EvaluatorUser")
+  evaluatedSubjects SubjectEvaluator[]
 
   // Student: odevzdání
   submissions Submission[] @relation("StudentSubmissions")
@@ -227,6 +228,7 @@ model ClassStudent {
 // ============================================
 
 model Subject {
+  evaluators SubjectEvaluator[]
   pointAdjustments PointAdjustment[]
   id          String       @id @default(cuid())
   code        String       @default("") // zkratka předmětu (např. PRG, WEB, DBS)
@@ -267,6 +269,17 @@ model SubjectClass {
   @@id([subjectId, classId])
   @@index([classId])
   @@map("subject_classes")
+}
+
+model SubjectEvaluator {
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  evaluatorId String
+  evaluator User @relation(fields: [evaluatorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([subjectId, evaluatorId])
+  @@index([evaluatorId])
+  @@map("subject_evaluators")
 }
 model Task {
   resultsPublishedAt DateTime?
