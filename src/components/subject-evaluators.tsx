@@ -3,39 +3,67 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DataTable } from "@/components/data-table";
 
-type Evaluator = { id: string; name: string; email: string; institution: string | null };
-export function SubjectEvaluators({ subjectId }: { subjectId: string }) {
-  const [data, setData] = useState<{ assigned: Evaluator[]; available: Evaluator[] }>();
-  const [evaluatorId, setEvaluatorId] = useState("");
+type Evaluator = { id: string; name: string; email: string; institution: string | null; organization: { name: string } | null };
+export type SubjectEvaluator = Evaluator;
+type Results = { assigned: Evaluator[]; available: Evaluator[]; hasMore: boolean };
+function details(person: Evaluator) {
+  return [person.email, person.organization?.name, person.institution].filter((value, index, all) => value && all.indexOf(value) === index).join(" · ");
+}
+export function SubjectEvaluators({ subjectId, initialAssigned }: { subjectId: string; initialAssigned: Evaluator[] }) {
+  const [tableSearch, setTableSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [search, setSearch] = useState("");
+  const query = search.trim();
+  const [data, setData] = useState<Results & { query: string }>({ assigned: initialAssigned, available: [], hasMore: false, query: "" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const load = useCallback(async () => {
-    const response = await fetch(`/api/subjects/${subjectId}/evaluators`);
+  const [error, setError] = useState<{ query: string; text: string }>();
+  const load = useCallback(async (query: string, signal?: AbortSignal) => {
+    const response = await fetch(`/api/subjects/${subjectId}/evaluators?${new URLSearchParams({ search: query })}`, { signal });
     if (!response.ok) throw new Error("Hodnotitele se nepodařilo načíst.");
-    return await response.json() as { assigned: Evaluator[]; available: Evaluator[] };
+    return { ...await response.json() as Results, query };
   }, [subjectId]);
   useEffect(() => {
-    let cancelled = false;
-    void load().then(result => { if (!cancelled) setData(result); }).catch(error => { if (!cancelled) setMessage(error.message); });
-    return () => { cancelled = true; };
-  }, [load]);
-  async function assign() {
+    if (query.length < 2) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void load(query, controller.signal).then(result => { if (!controller.signal.aborted) { setData(result); setError(undefined); } }).catch(reason => { if (!controller.signal.aborted) setError({ query, text: reason.message }); });
+    }, query.length >= 2 ? 300 : 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [load, query]);
+  async function assign(evaluatorId: string) {
     setBusy(true); setMessage("");
     try {
       const response = await fetch(`/api/subjects/${subjectId}/evaluators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evaluatorId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Přiřazení selhalo.");
-      setData(await load()); setEvaluatorId(""); setMessage("Hodnotitel byl přiřazen k předmětu.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Přiřazení selhalo."); }
+      setData(await load(query)); setMessage("Hodnotitel byl přiřazen k předmětu.");
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Přiřazení selhalo."); }
     finally { setBusy(false); }
   }
+  const current = data?.query === query;
+  const searchError = error?.query === query ? error.text : undefined;
+  const assigned = data.assigned.filter(person => [person.name, details(person)].join(" ").toLocaleLowerCase().includes(tableSearch.toLocaleLowerCase()));
   return <Card><CardHeader><CardTitle>Hodnotitelé předmětu</CardTitle></CardHeader><CardContent className="space-y-4">
     <p className="text-sm text-muted-foreground">Přiřazený hodnotitel najde v sekci Hodnocení finální práce ze všech zveřejněných a uzavřených zadání tohoto předmětu a počet zbývajících hodnocení. Automaticky se zahrnou i nové práce. Předmět nemůže upravovat.</p>
-    {data?.assigned.length ? <ul className="space-y-2">{data.assigned.map(person => <li key={person.id}><strong>{person.name}</strong> <span className="text-sm text-muted-foreground">{person.email}{person.institution ? ` · ${person.institution}` : ""}</span></li>)}</ul> : <p className="text-sm">{data ? "Zatím není přiřazen žádný hodnotitel." : "Načítání…"}</p>}
-    <div className="space-y-2"><Label htmlFor="subject-evaluator">Přidat hodnotitele</Label><select id="subject-evaluator" value={evaluatorId} onChange={event => setEvaluatorId(event.target.value)} disabled={busy || !data} className="h-10 w-full rounded border bg-background px-2"><option value="">Vyberte hodnotitele</option>{data?.available.filter(person => !data.assigned.some(a => a.id === person.id)).map(person => <option key={person.id} value={person.id}>{person.name} · {person.email}{person.institution ? ` · ${person.institution}` : ""}</option>)}</select></div>
-    <Button disabled={busy || !evaluatorId} onClick={() => void assign()}>Přiřadit k předmětu</Button>
+    <section aria-label="Přiřazení hodnotitelé"><DataTable tableId="subject-evaluators" clientPagination data={assigned} columns={[
+      { key: "name", label: "Jméno" },
+      { key: "email", label: "E-mail" },
+      { key: "organization", label: "Organizace", render: (person: Evaluator) => person.organization?.name || "—", sortValue: (person: Evaluator) => person.organization?.name || "" },
+      { key: "institution", label: "Instituce", render: (person: Evaluator) => person.institution || "—" },
+    ]} total={assigned.length} page={page} limit={limit} onSearch={setTableSearch} onPageChange={setPage} onLimitChange={setLimit} searchPlaceholder="Hledat přiřazené hodnotitele" /></section>
+    <div className="space-y-2"><Label htmlFor="subject-evaluator-search">Vyhledat hodnotitele</Label><Input id="subject-evaluator-search" type="search" value={search} onChange={event => setSearch(event.target.value)} disabled={busy} maxLength={100} placeholder="Jméno, e-mail nebo organizace" aria-describedby="subject-evaluator-hint" /><p id="subject-evaluator-hint" className="text-sm text-muted-foreground">Zadejte alespoň 2 znaky jména, e-mailu, organizace nebo instituce.</p></div>
+    <div aria-live="polite" aria-busy={query.length >= 2 && !current && !searchError}>
+      {searchError ? <p role="alert">{searchError}</p> : query.length >= 2 ? !current ? <p>Hledání…</p> : <>
+        {data.available.length ? <ul aria-label="Nalezení hodnotitelé" className="divide-y rounded-md border">{data.available.map(person => <li key={person.id} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0 break-words"><strong>{person.name}</strong><p className="text-sm text-muted-foreground">{details(person)}</p></div><Button disabled={busy} aria-label={`Přiřadit ${person.name} k předmětu`} onClick={() => void assign(person.id)}>Přiřadit k předmětu</Button></li>)}</ul> : <p>Žádní další hodnotitelé neodpovídají hledání.</p>}
+        {data.hasMore ? <p className="mt-2 text-sm text-muted-foreground">Zobrazeno prvních 20 výsledků. Zpřesněte hledání.</p> : null}
+      </> : null}
+    </div>
     {message ? <p role="status">{message}</p> : null}
   </CardContent></Card>;
 }

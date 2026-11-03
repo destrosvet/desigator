@@ -25,7 +25,32 @@ describe("subject evaluator management", () => {
   });
   it("lists only public account fields for subject managers", async () => {
     m.assigned.mockResolvedValue([{ evaluator: { id: "external", name: "Teacher" } }]);
-    const response = await GET(request(), context); expect(await response.json()).toEqual({ available: [], assigned: [{ id: "external", name: "Teacher" }] });
+    const response = await GET(new Request("http://localhost/api/subjects/subject/evaluators?search=Teacher"), context); expect(await response.json()).toEqual({ available: [], hasMore: false, assigned: [{ id: "external", name: "Teacher" }] });
     expect(m.users.mock.calls[0][0].select).not.toHaveProperty("password");
+  });
+  it("does not fetch the full evaluator directory before a search", async () => {
+    for (const search of ["", "a", "   "]) {
+      const response = await GET(new Request("http://localhost/api/subjects/subject/evaluators?" + new URLSearchParams({ search })), context);
+      expect((await response.json()).available).toEqual([]);
+    }
+    expect(m.users).not.toHaveBeenCalled();
+  });
+  it("searches name, email, institution and actual organization while excluding assigned users", async () => {
+    await GET(new Request("http://localhost/api/subjects/subject/evaluators?search=%20School%20"), context);
+    const args = m.users.mock.calls[0][0];
+    const contains = { contains: "School", mode: "insensitive" };
+    expect(args.where.AND[1]).toEqual({ evaluatedSubjects: { none: { subjectId: "subject" } } });
+    expect(args.where.AND[2].OR).toEqual([{ name: contains }, { email: contains }, { institution: contains }, { organization: { name: contains } }]);
+    expect(args.where.AND[0].isActive).toBe(true);
+    expect(args.take).toBe(21); expect(args.select.organization).toEqual({ select: { name: true } });
+  });
+  it("limits results and signals when the user should refine their search", async () => {
+    m.users.mockResolvedValue(Array.from({ length: 21 }, (_, id) => ({ id: String(id) })));
+    const response = await GET(new Request("http://localhost/api/subjects/subject/evaluators?search=School"), context);
+    const result = await response.json(); expect(result.available).toHaveLength(20); expect(result.hasMore).toBe(true);
+  });
+  it("rejects oversized searches", async () => {
+    expect((await GET(new Request("http://localhost/api/subjects/subject/evaluators?search=" + "x".repeat(101)), context)).status).toBe(400);
+    expect(m.users).not.toHaveBeenCalled();
   });
 });
