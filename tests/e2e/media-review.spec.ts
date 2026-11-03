@@ -187,6 +187,18 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     await expect(reviewer.getByLabel("Technické provedení", { exact: true })).toHaveValue("0");
 
+    // Relative scoring uses the last visited work and changes the total by one, not each criterion.
+    await reviewer.keyboard.press("ArrowUp");
+    await expect(reviewer.getByLabel("Kompozice", { exact: true })).toHaveValue("56");
+    await expect(reviewer.getByLabel("Technické provedení", { exact: true })).toHaveValue("30");
+    await expect.poll(async () => (await (await reviewer.request.get(`/api/evaluations/${secondId}`)).json()).evaluation.totalPoints).toBe(86);
+    await reviewer.keyboard.press("ArrowDown");
+    await expect(reviewer.getByLabel("Kompozice", { exact: true })).toHaveValue("54");
+    await expect.poll(async () => (await (await reviewer.request.get(`/api/evaluations/${secondId}`)).json()).evaluation.totalPoints).toBe(84);
+    // Restore the original fixture for the navigation assertions below.
+    await reviewer.getByLabel("Kompozice", { exact: true }).fill("1");
+    await reviewer.getByLabel("Technické provedení", { exact: true }).fill("0");
+
 
     // Pointer use releases the thumb; plain arrows can immediately switch works again.
     const composition = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });

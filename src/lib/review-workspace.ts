@@ -44,3 +44,14 @@ export function isFullyRated(draft: ReviewDraft) {
 export function draftScores(draft: ReviewDraft) {
   return draft.touched.filter((id) => id in draft.limits).map((criterionId) => ({ criterionId, points: draft.scores[criterionId].points, comment: draft.scores[criterionId].comment || null }));
 }
+
+export function relativeReviewDraft(current: ReviewDraft, previous: ReviewDraft, direction: 1 | -1): ReviewDraft | null {
+  const ids = Object.keys(current.limits);
+  if (current.readOnly || !isFullyRated(previous) || ids.length !== Object.keys(previous.limits).length || ids.some((id) => current.limits[id] !== previous.limits[id])) return null;
+  const total = ids.reduce((sum, id) => sum + previous.scores[id].points, 0);
+  const target = total + direction;
+  if (!Number.isInteger(total) || target < 0 || target > current.maxPoints || ids.some((id) => previous.scores[id].points < 0 || previous.scores[id].points > current.limits[id])) return null;
+  const adjusted = ids.find((id) => direction === 1 ? previous.scores[id].points < current.limits[id] : previous.scores[id].points > 0);
+  if (!adjusted) return null;
+  return { ...current, touched: ids, scores: Object.fromEntries(ids.map((id) => [id, { ...current.scores[id], points: previous.scores[id].points + (id === adjusted ? direction : 0) }])) };
+}

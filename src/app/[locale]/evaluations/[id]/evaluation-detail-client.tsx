@@ -61,6 +61,7 @@ export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdi
     </section>
 
     <section aria-label="Hodnocení práce" className="mx-auto w-full max-w-3xl rounded-xl border bg-card px-4 py-3 sm:px-6">
+      {editable ? <p className="mb-3 text-xs text-muted-foreground">↑ / ↓ převezme body z naposledy otevřené, plně ohodnocené práce a nastaví celkem o bod více / méně. Komentáře zůstávají vlastní. Šipky fungují mimo vstupní pole a posuvníky.</p> : null}
       {form.readOnly ? <p role="status" className="mb-3 text-sm text-muted-foreground">{work.submission.resultsPublishedAt ? publication("locked") : "Toto hodnocení může upravit pouze přiřazený hodnotitel."}</p> : null}
       {!task.criteria.length ? <p role="alert" className="text-sm">Zadání nemá hodnoticí kritéria. Před hodnocením je musí doplnit učitel.</p> : null}
       <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">

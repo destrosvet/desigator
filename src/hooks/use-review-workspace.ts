@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { attachmentUrl, PREVIEW_IMAGE_TYPES } from "@/lib/media";
-import { draftFromWork, draftScores, isFullyRated, type ReviewDraft, type ReviewQueueItem, type ReviewWork } from "@/lib/review-workspace";
+import { draftFromWork, draftScores, isFullyRated, relativeReviewDraft, type ReviewDraft, type ReviewQueueItem, type ReviewWork } from "@/lib/review-workspace";
 
 import { matchingReviewQueue } from "@/lib/review-filters";
 
@@ -16,6 +16,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
   const queueRef = useRef(initialQueue);
   const [form, setForm] = useState(() => draftFromWork(work));
   const formRef = useRef(form);
+  const previousReview = useRef<ReviewDraft | null>(null);
   const cache = useRef(new Map<string, ReviewWork>([[initial.id, work]]));
   const requests = useRef(new Map<string, Promise<ReviewWork>>());
   const imageCache = useRef(new Map<string, HTMLImageElement>());
@@ -94,6 +95,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       if (!(await persist("navigation"))) return;
       const next = await load(id);
       const draft = draftFromWork(next);
+      previousReview.current = formRef.current;
       formRef.current = draft; setWork(next); setForm(draft); setMessage("");
       window.history.replaceState(null, "", `/${locale}/evaluations/${id}${navigationQuery}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Práci se nepodařilo načíst."); }
@@ -148,6 +150,16 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       }
       if (event.altKey) return;
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], [role="slider"], [role="combobox"]')) return;
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        if (moving.current || formRef.current.readOnly) return;
+        event.preventDefault();
+        const previous = previousReview.current;
+        const relative = previous && relativeReviewDraft(formRef.current, previous, event.key === "ArrowUp" ? 1 : -1);
+        if (!relative) { setMessage("Pro porovnání nejprve otevřete a ohodnoťte jinou práci. Rozdíl musí být v bodových limitech."); return; }
+        change(() => relative);
+        void persist("draft");
+        return;
+      }
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       const next = activeQueue[index + (event.key === "ArrowRight" ? 1 : -1)];
       if (next) { event.preventDefault(); void goTo(next.id); }
@@ -169,7 +181,7 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
       window.removeEventListener("keydown", keydown, true); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", click, true);
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [goTo, leave, persist, statusFilter]);
+  }, [change, goTo, leave, persist, statusFilter]);
 
   return { work, queue: matchingReviewQueue(queue, work.id, statusFilter), form, saving, navigating, error, message, change, persist, goTo, leave, fullyRated: isFullyRated(form) };
 }
