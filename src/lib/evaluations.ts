@@ -1,5 +1,5 @@
 import { managedTaskScope } from "@/lib/authorization";
-import { isAdmin, canEvaluate, hasRole } from "@/lib/permissions";
+import { isAdmin, canEvaluate, canTeach, hasRole } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -33,6 +33,7 @@ export function evaluationWhere(user: AuthUser, query: z.infer<typeof evaluation
   const { search, status, taskId, subjectId, studentId, evaluatorId } = query;
   return { AND: [
     evaluationScope(user),
+    ...(canEvaluate(user) || canTeach(user) ? [{ evaluatorId: user.id }] : []),
     ...(status ? [{ status }] : []),
     ...(taskId ? [{ submission: { taskId } }] : []),
     ...(subjectId ? [{ submission: { task: { subjectId } } }] : []),

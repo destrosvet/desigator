@@ -2,11 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 import { isAdmin, isSchoolAdmin, hasRole, primaryRole, canEvaluate, hasSchoolMembership, showSchoolWorkspace, showPersonalTemplates } from "@/lib/permissions";
 import { managedClassScope, managedTaskScope, visibleTaskScope, visibleSubjectScope } from "@/lib/authorization";
-import { evaluationScope } from "@/lib/evaluations";
+import { evaluationScope, evaluationWhere, evaluationQuerySchema } from "@/lib/evaluations";
 import { schoolRolesSchema } from "@/lib/organizations";
 import { planStudentImport } from "@/lib/student-import";
 const combined = { id: "teacher", role: "TEACHER", roles: ["SCHOOL_ADMIN", "TEACHER", "EVALUATOR"], organizationId: "school-a" };
 describe("school permissions", () => {
+  it("keeps review grids personal even for administrators and combined teacher roles", () => {
+    for (const user of [combined, { id: "teacher", role: "TEACHER", roles: ["TEACHER"] }, { id: "admin", role: "ADMIN" }, { id: "reviewer", role: "EVALUATOR" }]) {
+      const where = evaluationWhere(user, evaluationQuerySchema.parse({ taskId: "task", evaluatorId: "someone-else" }));
+      expect(where.AND).toContainEqual({ evaluatorId: user.id });
+      expect(where.AND).toContainEqual({ evaluatorId: "someone-else" });
+      expect(where.AND).toContainEqual({ submission: { taskId: "task" } });
+    }
+  });
   it("combines independent permissions without platform administrator access", () => {
     expect(isSchoolAdmin(combined)).toBe(true); expect(isAdmin(combined)).toBe(false);
     expect(hasRole(combined, "EVALUATOR")).toBe(true);

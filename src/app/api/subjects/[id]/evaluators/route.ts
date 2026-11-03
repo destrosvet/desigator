@@ -41,3 +41,21 @@ export async function POST(req: Request, { params }: Context) {
   await db.subjectEvaluator.upsert({ where: { subjectId_evaluatorId: { subjectId: id, evaluatorId: evaluator.id } }, update: {}, create: { subjectId: id, evaluatorId: evaluator.id } });
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(req: Request, { params }: Context) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  const body = z.object({ evaluatorId: z.string().min(1) }).safeParse(await req.json().catch(() => null));
+  if (!body.success) return NextResponse.json({ error: "Vyberte hodnotitele." }, { status: 400 });
+  const evaluatorId = body.data.evaluatorId;
+  if (!(evaluatorId === session.user.id && canEvaluate(session.user)) && !(await canManageSubject(session.user, id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const removed = await db.$transaction(async tx => {
+    // Use the same task locks as automatic assignment and starting a review.
+    const tasks = await tx.task.findMany({ where: { subjectId: id }, select: { id: true }, orderBy: { id: "asc" } });
+    for (const task of tasks) await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${task.id} FOR UPDATE`;
+    await tx.subjectEvaluator.deleteMany({ where: { subjectId: id, evaluatorId } });
+    return tx.evaluation.deleteMany({ where: { evaluatorId, submission: { task: { subjectId: id, resultsPublishedAt: null }, resultsPublishedAt: null }, status: "PENDING", totalPoints: null, evaluatedAt: null, OR: [{ feedback: null }, { feedback: "" }], scores: { none: {} } } });
+  }, { timeout: 20000 });
+  return NextResponse.json({ success: true, removed: removed.count });
+}

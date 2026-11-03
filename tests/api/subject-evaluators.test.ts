@@ -1,13 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ session: vi.fn(), manage: vi.fn(), users: vi.fn(), user: vi.fn(), assigned: vi.fn(), upsert: vi.fn() }));
+const m = vi.hoisted(() => ({ session: vi.fn(), manage: vi.fn(), users: vi.fn(), user: vi.fn(), assigned: vi.fn(), upsert: vi.fn(), transaction: vi.fn(), tasks: vi.fn(), lock: vi.fn(), removeAssignment: vi.fn(), removeReviews: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: m.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/authorization", () => ({ canManageSubject: m.manage }));
-vi.mock("@/lib/db", () => ({ db: { user: { findMany: m.users, findFirst: m.user }, subjectEvaluator: { findMany: m.assigned, upsert: m.upsert } } }));
-import { GET, POST } from "@/app/api/subjects/[id]/evaluators/route";
+vi.mock("@/lib/db", () => ({ db: { $transaction: m.transaction, user: { findMany: m.users, findFirst: m.user }, subjectEvaluator: { findMany: m.assigned, upsert: m.upsert } } }));
+import { DELETE, GET, POST } from "@/app/api/subjects/[id]/evaluators/route";
 const context = { params: Promise.resolve({ id: "subject" }) };
 const request = (data: unknown = { evaluatorId: "external" }) => new Request("http://localhost/api/subjects/subject/evaluators", { method: "POST", body: JSON.stringify(data) });
 describe("subject evaluator management", () => {
+  function setupRemoval() {
+    m.tasks.mockResolvedValue([{ id: "task" }]); m.removeReviews.mockResolvedValue({ count: 3 });
+    m.transaction.mockImplementation(async run => run({ task: { findMany: m.tasks }, $queryRaw: m.lock, subjectEvaluator: { deleteMany: m.removeAssignment }, evaluation: { deleteMany: m.removeReviews } }));
+  }
+  it("lets managers remove assignments and only untouched unpublished reviews", async () => {
+    setupRemoval();
+    const response = await DELETE(request(), context);
+    expect(await response.json()).toEqual({ success: true, removed: 3 });
+    expect(m.removeAssignment).toHaveBeenCalledWith({ where: { subjectId: "subject", evaluatorId: "external" } });
+    expect(m.removeReviews).toHaveBeenCalledWith({ where: { evaluatorId: "external", submission: { task: { subjectId: "subject", resultsPublishedAt: null }, resultsPublishedAt: null }, status: "PENDING", totalPoints: null, evaluatedAt: null, OR: [{ feedback: null }, { feedback: "" }], scores: { none: {} } } });
+    expect(m.lock).toHaveBeenCalledTimes(1);
+  });
+  it("permits self-withdrawal but prevents removing another reviewer without management", async () => {
+    setupRemoval(); m.manage.mockResolvedValue(false); m.session.mockResolvedValue({ user: { id: "external", role: "EVALUATOR" } });
+    expect((await DELETE(request(), context)).status).toBe(200);
+    m.transaction.mockClear();
+    expect((await DELETE(request({ evaluatorId: "other" }), context)).status).toBe(403);
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
+  it("authenticates and validates removal before touching data", async () => {
+    m.session.mockResolvedValueOnce(null); expect((await DELETE(request(), context)).status).toBe(401);
+    expect((await DELETE(request({}), context)).status).toBe(400);
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
   beforeEach(() => { vi.resetAllMocks(); m.session.mockResolvedValue({ user: { id: "owner", role: "TEACHER" } }); m.manage.mockResolvedValue(true); m.user.mockResolvedValue({ id: "external", role: "TEACHER", roles: ["TEACHER", "EVALUATOR"], organizationId: "other-school" }); m.users.mockResolvedValue([]); m.assigned.mockResolvedValue([]); });
   it("requires authentication and subject management for listing and assigning", async () => {
     m.session.mockResolvedValueOnce(null); expect((await GET(request(), context)).status).toBe(401);

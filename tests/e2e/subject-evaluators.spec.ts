@@ -2,6 +2,22 @@ import { expect, test } from "@playwright/test";
 import { teacherStatePath } from "./auth-setup";
 
 test.skip(process.env.E2E_WORKFLOW !== "true", "Requires isolated demo database");
+
+test("administrator sees a results table instead of image review grids", async ({ page }) => {
+  await page.goto("/cs/auth/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("admin@desigator.cz");
+  await page.getByLabel("Heslo", { exact: true }).fill("admin123");
+  await page.getByRole("button", { name: /Přihlásit/ }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto("/cs/evaluations");
+  await expect(page.getByRole("heading", { name: "Správa hodnocení", exact: true })).toBeVisible();
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.getByLabel("Grid studentských prací", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^Hodnotit / })).toHaveCount(0);
+  await page.getByRole("link", { name: /^Výsledky: / }).first().click();
+  await expect(page).toHaveURL(/\/subjects\/[^/]+\/results$/);
+  await expect(page.getByRole("table")).toBeVisible();
+});
 test("subject assignment includes future tasks and final submissions without per-work assignment", async ({ browser, baseURL }) => {
   const ownerContext = await browser.newContext({ baseURL, storageState: teacherStatePath });
   const reviewerContext = await browser.newContext({ baseURL });
@@ -55,9 +71,29 @@ test("subject assignment includes future tasks and final submissions without per
     await expect(card).toContainText("0 / 1 hodnocení dokončeno"); await card.click();
     const { evaluations } = await (await reviewer.request.get(`/api/evaluations?taskId=${task.id}`)).json();
     expect(evaluations).toHaveLength(1); expect(evaluations[0].evaluator.id).toBe(user.id);
+    // Another evaluator's assignment must not duplicate the work in a personal grid.
+    expect((await owner.request.post("/api/evaluations", { data: { submissionId: evaluations[0].submission.id } })).status()).toBe(201);
+    const own = await (await owner.request.get(`/api/evaluations?taskId=${task.id}`)).json();
+    expect(own.total).toBe(1); expect(own.evaluations[0].evaluator.id).not.toBe(user.id);
+    await reviewer.reload();
+    await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(1);
+    // Managers can remove untouched assignments; opening the workspace must not recreate them.
+    await owner.getByRole("button", { name: `Odebrat ${user.name} z hodnocení předmětu`, exact: true }).click();
+    await expect(owner.getByRole("status")).toContainText("nevyplněná hodnocení byla odebrána");
+    expect((await (await reviewer.request.get(`/api/evaluations?taskId=${task.id}`)).json()).total).toBe(0);
+    expect((await owner.request.post(`/api/subjects/${subject.id}/evaluators`, { data: { evaluatorId: user.id } })).status()).toBe(200);
+    const reassigned = await (await reviewer.request.get(`/api/evaluations?taskId=${task.id}`)).json();
+    const reviewId = reassigned.evaluations[0].id;
     expect((await reviewer.request.patch(`/api/tasks/${task.id}`, { data: { title: "Forbidden" } })).status()).toBe(403);
-    expect((await reviewer.request.patch(`/api/evaluations/${evaluations[0].id}`, { data: { status: "COMPLETED", scores: [{ criterionId: task.criteria[0].id, points: 80 }] } })).status()).toBe(200);
+    expect((await reviewer.request.patch(`/api/evaluations/${reviewId}`, { data: { status: "COMPLETED", scores: [{ criterionId: task.criteria[0].id, points: 80 }] } })).status()).toBe(200);
     await reviewer.goto(`/cs/evaluations?subjectId=${subject.id}`);
     await expect(reviewer.getByRole("link").filter({ has: reviewer.getByRole("heading", { name: task.title, exact: true }) })).toContainText("1 / 1 hodnocení dokončeno");
+    await reviewer.getByRole("button", { name: "Zrušit moje přiřazení k předmětu", exact: true }).click();
+    await expect(reviewer).toHaveURL(/\/cs\/evaluations$/);
+    expect((await (await reviewer.request.get(`/api/evaluations/${reviewId}`)).json()).evaluation.totalPoints).toBe(80);
+    expect((await reviewer.request.get(`/api/tasks/${task.id}`)).status()).toBe(200);
+    await owner.goto(`/cs/subjects/${subject.id}/results`);
+    await owner.getByText("Hodnocení jednotlivých hodnotitelů", { exact: true }).click();
+    await expect(owner.getByRole("list").filter({ hasText: user.name })).toContainText("80,00 b.");
   } finally { await ownerContext.close(); await reviewerContext.close(); }
 });

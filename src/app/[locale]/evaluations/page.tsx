@@ -7,9 +7,10 @@ import { db } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { EvaluationGallery } from "@/components/evaluation-gallery";
 import { Link } from "@/components/navigation";
-import { anonymousEvaluation, canEvaluate } from "@/lib/permissions";
+import { anonymousEvaluation, canEvaluate, canTeach, isAdmin } from "@/lib/permissions";
 import { canManageTask } from "@/lib/authorization";
 import { readTaskPublication } from "@/lib/task-result-publication";
+import { WithdrawReviewAssignment } from "@/components/withdraw-review-assignment";
 
 export default async function EvaluationsPage({ params, searchParams }: {
   params: Promise<{ locale: string }>;
@@ -18,12 +19,21 @@ export default async function EvaluationsPage({ params, searchParams }: {
   const { locale } = await params;
   const session = await getServerSession(authOptions);
   if (!session) redirect(`/${locale}/auth/login`);
-  await syncSubjectEvaluations(session.user);
   const raw = await searchParams;
   const normalized = Object.fromEntries(Object.entries(raw).filter(([, value]) => typeof value === "string" && value !== ""));
   const parsed = evaluationQuerySchema.safeParse(normalized);
   if (!parsed.success) return <AppShell><div role="alert">Neplatné filtry. <Link href="/evaluations">Obnovit přehled</Link></div></AppShell>;
-  const scope = evaluationScope(session.user);
+  const scope = canEvaluate(session.user) || canTeach(session.user) ? { evaluatorId: session.user.id } : evaluationScope(session.user);
+  if (isAdmin(session.user)) {
+    const [assignments, pending, resultSubjects] = await Promise.all([
+      db.subjectEvaluator.findMany({ where: { evaluatorId: session.user.id }, select: { subject: { select: { id: true, name: true } } } }),
+      db.subject.findMany({ where: { tasks: { some: { submissions: { some: { evaluations: { some: { evaluatorId: session.user.id } } } } } } }, select: { id: true, name: true } }),
+      db.subject.findMany({ where: { isActive: true }, select: { id: true, name: true, year: true }, orderBy: [{ year: "desc" }, { name: "asc" }] }),
+    ]);
+    const subjects = [...new Map([...assignments.map(item => item.subject), ...pending].map(subject => [subject.id, subject])).values()];
+    return <AppShell><div className="space-y-5"><h1 className="text-2xl font-bold">Správa hodnocení</h1><p className="text-sm text-muted-foreground">Vyberte předmět pro přehled výsledků.</p><div className="overflow-x-auto rounded-lg border"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-3">Předmět</th><th className="p-3">Rok</th><th className="p-3">Výsledky</th></tr></thead><tbody>{resultSubjects.map(subject => <tr key={subject.id} className="border-b last:border-0"><td className="p-3">{subject.name}</td><td className="p-3">{subject.year}</td><td className="p-3"><Link href={`/subjects/${subject.id}/results`} className="font-medium underline" aria-label={`Výsledky: ${subject.name}`}>Zobrazit výsledky</Link></td></tr>)}</tbody></table></div>{subjects.length ? <section aria-label="Moje přiřazení k hodnocení" className="space-y-4"><h2 className="text-lg font-semibold">Moje přiřazení k hodnocení</h2>{subjects.map(subject => <div key={subject.id}><h3 className="mb-2 font-medium">{subject.name}</h3><WithdrawReviewAssignment subjectId={subject.id} evaluatorId={session.user.id} /></div>)}</section> : <p className="text-sm text-muted-foreground">Nemáte žádné vlastní přiřazení k hodnocení.</p>}</div></AppShell>;
+  }
+  await syncSubjectEvaluations(session.user);
   const tasks = await db.task.findMany({
     where: { OR: [{ submissions: { some: { evaluations: { some: scope } } } }, ...(canEvaluate(session.user) ? [{ status: { in: ["PUBLISHED", "CLOSED"] as ("PUBLISHED" | "CLOSED")[] }, subject: { isActive: true, evaluators: { some: { evaluatorId: session.user.id } } } }] : [])] },
     select: { id: true, title: true, subject: { select: { id: true, name: true, year: true, classes: { select: { class: { select: { name: true } } } } } }, submissions: { where: { evaluations: { some: scope } }, select: { evaluations: { where: scope, select: { status: true } } } } },
@@ -37,7 +47,7 @@ export default async function EvaluationsPage({ params, searchParams }: {
   const subjectId = selectedTask?.subject.id || parsed.data.subjectId;
   const subject = summaries.find((task) => task.subject.id === subjectId)?.subject;
   if ((parsed.data.taskId && !selectedTask) || (subjectId && !subject)) notFound();
-  const breadcrumbs = <nav aria-label="Drobečková navigace" className="mb-5 flex flex-wrap gap-2 text-sm text-muted-foreground"><Link href="/evaluations" className="hover:underline">Předměty</Link>{subject ? <><span>/</span><Link href={`/evaluations?subjectId=${subject.id}`} className="hover:underline">{subject.name}</Link></> : null}{selectedTask ? <><span>/</span><span className="text-foreground">{selectedTask.title}</span></> : null}</nav>;
+  const breadcrumbs = <><nav aria-label="Drobečková navigace" className="mb-5 flex flex-wrap gap-2 text-sm text-muted-foreground"><Link href="/evaluations" className="hover:underline">Předměty</Link>{subject ? <><span>/</span><Link href={`/evaluations?subjectId=${subject.id}`} className="hover:underline">{subject.name}</Link></> : null}{selectedTask ? <><span>/</span><span className="text-foreground">{selectedTask.title}</span></> : null}</nav>{subject && canEvaluate(session.user) ? <WithdrawReviewAssignment subjectId={subject.id} evaluatorId={session.user.id} /> : null}</>;
   if (selectedTask) {
     const [result, publication] = await Promise.all([
       listEvaluations(session.user, parsed.data),

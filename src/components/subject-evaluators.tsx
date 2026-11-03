@@ -36,13 +36,13 @@ export function SubjectEvaluators({ subjectId, initialAssigned }: { subjectId: s
     }, query.length >= 2 ? 300 : 0);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [load, query]);
-  async function assign(evaluatorId: string) {
+  async function assign(evaluatorId: string, remove = false) {
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/subjects/${subjectId}/evaluators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evaluatorId }) });
+      const response = await fetch(`/api/subjects/${subjectId}/evaluators`, { method: remove ? "DELETE" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evaluatorId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Přiřazení selhalo.");
-      setData(await load(query)); setMessage("Hodnotitel byl přiřazen k předmětu.");
+      setData(await load(query)); setMessage(remove ? "Přiřazení a nevyplněná hodnocení byla odebrána. Rozpracovaná a dokončená hodnocení zůstala zachována." : "Hodnotitel byl přiřazen k předmětu.");
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Přiřazení selhalo."); }
     finally { setBusy(false); }
   }
@@ -56,6 +56,7 @@ export function SubjectEvaluators({ subjectId, initialAssigned }: { subjectId: s
       { key: "email", label: "E-mail" },
       { key: "organization", label: "Organizace", render: (person: Evaluator) => person.organization?.name || "—", sortValue: (person: Evaluator) => person.organization?.name || "" },
       { key: "institution", label: "Instituce", render: (person: Evaluator) => person.institution || "—" },
+      { key: "actions", label: "Akce", render: (person: Evaluator) => <Button variant="outline" size="sm" disabled={busy} aria-label={`Odebrat ${person.name} z hodnocení předmětu`} onClick={() => void assign(person.id, true)}>Odebrat z hodnocení</Button> },
     ]} total={assigned.length} page={page} limit={limit} onSearch={setTableSearch} onPageChange={setPage} onLimitChange={setLimit} searchPlaceholder="Hledat přiřazené hodnotitele" /></section>
     <div className="space-y-2"><Label htmlFor="subject-evaluator-search">Vyhledat hodnotitele</Label><Input id="subject-evaluator-search" type="search" value={search} onChange={event => setSearch(event.target.value)} disabled={busy} maxLength={100} placeholder="Jméno, e-mail nebo organizace" aria-describedby="subject-evaluator-hint" /><p id="subject-evaluator-hint" className="text-sm text-muted-foreground">Zadejte alespoň 2 znaky jména, e-mailu, organizace nebo instituce.</p></div>
     <div aria-live="polite" aria-busy={query.length >= 2 && !current && !searchError}>
