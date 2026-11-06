@@ -32,12 +32,17 @@ test("review navigation and return preserve the grid filter across saving and re
   }
   expect((await reviewer.request.patch("/api/evaluations/" + reviewIds[1], { data: { status: "COMPLETED", scores: [{ criterionId: task.criteria[0].id, points: 5 }] } })).status()).toBe(200);
   const filters = new URLSearchParams({ taskId: task.id, status: "PENDING", search: title, evaluatorId: session.user.id, page: "1", limit: "1" });
-  const result = await (await reviewer.request.get("/api/evaluations?" + filters)).json();
+  const fullPage = new URLSearchParams(filters);
+  fullPage.set("limit", "2");
+  const result = await (await reviewer.request.get("/api/evaluations?" + fullPage)).json();
   expect(result.total).toBe(2);
+  expect(result.evaluations).toHaveLength(2);
   const firstId = result.evaluations[0].id;
   const secondId = result.evaluations[1].id;
   for (const [index, id] of [firstId, secondId].entries()) {
-    const paged = await (await reviewer.request.get(`/api/evaluations?${filters}&limit=1&page=${index + 1}`)).json();
+    const pageFilters = new URLSearchParams(filters);
+    pageFilters.set("page", String(index + 1));
+    const paged = await (await reviewer.request.get("/api/evaluations?" + pageFilters)).json();
     expect(paged.evaluations.map((item: { id: string }) => item.id)).toEqual([id]);
   }
   const page = await reviewer.newPage();
