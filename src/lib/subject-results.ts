@@ -4,6 +4,7 @@ import {hasRole,schoolId} from "@/lib/permissions";
 import {parseGradingScale} from "@/lib/grading-scale";
 import {publishedAverage,finalGrade,visibleResultReviews} from "@/lib/public-results-grade";
 import {adjustedTotal,gradeDistance,studentVisibleAdjustments} from "@/lib/result-adjustments";
+import {PREVIEW_IMAGE_TYPES} from "@/lib/media";
 export async function subjectResults(user:AuthUser,id:string){
  const teacher=await canManageSubject(user,id);
  if(!teacher&&!hasRole(user,"STUDENT"))return null;
@@ -12,7 +13,7 @@ export async function subjectResults(user:AuthUser,id:string){
  const classIds=subject.classes.map(link=>link.classId),organizationId=subject.classes[0].class.organizationId;
  const [memberships,tasks,adjustments]=await Promise.all([
  db.classStudent.findMany({where:{classId:{in:classIds},...(!teacher?{studentId:user.id}:{}),student:{isActive:true,organizationId}},select:{student:{select:{id:true,name:true,externalId:true}}},orderBy:{student:{name:"asc"}}}),
- db.task.findMany({where:{subjectId:id,status:{in:["PUBLISHED","CLOSED"]},isTemplate:false},select:{id:true,title:true,maxPoints:true,resultsPublishedAt:true,submissions:{where:{stage:"FINAL",...(!teacher?{studentId:user.id,OR:[{resultsPublishedAt:{not:null}},{task:{resultsPublishedAt:{not:null}}}]}:{})},orderBy:{version:"desc"},select:{studentId:true,resultsPublishedAt:true,evaluations:{select:{status:true,totalPoints:true,...(teacher?{evaluator:{select:{id:true,name:true}}}:{})}}}}},orderBy:[{createdAt:"asc"},{id:"asc"}]}),
+ db.task.findMany({where:{subjectId:id,status:{in:["PUBLISHED","CLOSED"]},isTemplate:false},select:{id:true,title:true,maxPoints:true,resultsPublishedAt:true,submissions:{where:{stage:"FINAL",...(!teacher?{studentId:user.id,OR:[{resultsPublishedAt:{not:null}},{task:{resultsPublishedAt:{not:null}}}]}:{})},orderBy:{version:"desc"},select:{studentId:true,resultsPublishedAt:true,attachments:{where:{mimeType:{in:[...PREVIEW_IMAGE_TYPES]}},orderBy:[{uploadedAt:"asc"},{id:"asc"}],take:1,select:{id:true}},evaluations:{select:{status:true,totalPoints:true,...(teacher?{evaluator:{select:{id:true,name:true}}}:{})}}}}},orderBy:[{createdAt:"asc"},{id:"asc"}]}),
  db.pointAdjustment.findMany({where:{subjectId:id,...(!teacher?{studentId:user.id}:{})},include:{author:{select:{name:true}},revokedBy:{select:{name:true}}},orderBy:{createdAt:"desc"}})
  ]);
  const members=[...new Map(memberships.map(item=>[item.student.id,item])).values()];
@@ -23,11 +24,11 @@ export async function subjectResults(user:AuthUser,id:string){
  const work=task.submissions.find(s=>s.studentId===student.id);
  const reviews=work?.evaluations??[];
  const countedReviews=teacher?reviews.filter(review=>review.status==="COMPLETED"):visibleResultReviews(reviews,Boolean(task.resultsPublishedAt));
- return {points:publishedAverage(countedReviews,task.maxPoints),pending:Boolean((teacher||task.resultsPublishedAt)&&reviews.some(review=>review.status!=="COMPLETED")),published:Boolean(work&&(work.resultsPublishedAt||task.resultsPublishedAt)),...(teacher?{reviews:reviews.map(review=>({evaluatorId:review.evaluator?.id??"",name:review.evaluator?.name??"Hodnotitel",status:review.status,points:review.totalPoints}))}: {})};
+ return {thumbnailId:work?.attachments?.[0]?.id??null,points:publishedAverage(countedReviews,task.maxPoints),pending:Boolean((teacher||task.resultsPublishedAt)&&reviews.some(review=>review.status!=="COMPLETED")),published:Boolean(work&&(work.resultsPublishedAt||task.resultsPublishedAt)),...(teacher?{reviews:reviews.map(review=>({evaluatorId:review.evaluator?.id??"",name:review.evaluator?.name??"Hodnotitel",status:review.status,points:review.totalPoints}))}: {})};
  });
  const base=Math.round(cells.reduce((sum,c)=>sum+(c.points??0),0)*100)/100,total=adjustedTotal(base,active),grade=finalGrade(total,maximum,scale);
  const publicBase=Math.round(tasks.reduce((sum,task)=>{const work=task.submissions.find(s=>s.studentId===student.id&&(s.resultsPublishedAt||task.resultsPublishedAt));return sum+(work?publishedAverage(visibleResultReviews(work.evaluations,Boolean(task.resultsPublishedAt)),task.maxPoints)??0:0);},0)*100)/100;
- const common={studentId:student.id,name:student.name,externalId:student.externalId,cells:cells.map(c=>({points:c.points===null?null:Math.round(c.points*100)/100,published:c.published,...(teacher?{reviews:c.reviews}: {})})),total,grade,provisional:cells.some(c=>c.points===null||c.pending),visibleAdjustments:studentVisibleAdjustments(own)};
+ const common={studentId:student.id,name:student.name,externalId:student.externalId,cells:cells.map(c=>({points:c.points===null?null:Math.round(c.points*100)/100,published:c.published,thumbnailId:c.thumbnailId,...(teacher?{reviews:c.reviews}: {})})),total,grade,provisional:cells.some(c=>c.points===null||c.pending),visibleAdjustments:studentVisibleAdjustments(own)};
  return {...common,...(teacher?{base,adjustmentPoints:active.reduce((sum,a)=>sum+a.amountCents,0)/100,distance:gradeDistance(total,maximum,scale),publishedTotal:adjustedTotal(publicBase,active),adjustments:own.map(a=>({id:a.id,points:a.amountCents/100,reason:a.reason,visibleToStudent:a.visibleToStudent,author:a.author.name,createdAt:a.createdAt.toISOString(),revokedAt:a.revokedAt?.toISOString()??null,revokedBy:a.revokedBy?.name??null}))}: {})};
  });
  return {mode:teacher?"teacher" as const:"student" as const,id:subject.id,name:subject.name,year:subject.year,className:subject.classes.map(link=>link.class.name).join(", "),maximum,scale,tasks:tasks.map(({id,title,maxPoints})=>({id,title,maxPoints})),rows};

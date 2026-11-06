@@ -18,10 +18,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
 
     const attachment = await db.attachment.findUnique({ where: { id: path[0] } });
     if (!attachment) return NextResponse.json({ error: "File not found" }, { status: 404 });
-    if (!(await canReadAttachment(session.user, attachment.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
     const query = new URL(req.url).searchParams;
     const thumbnail = query.get("thumbnail") === "1";
+    if (!(await canReadAttachment(session.user, attachment.id, thumbnail))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const inline = thumbnail || query.get("preview") === "1";
     if ((thumbnail && !PREVIEW_IMAGE_TYPES.has(attachment.mimeType)) || (inline && !PREVIEW_IMAGE_TYPES.has(attachment.mimeType) && !PREVIEW_VIDEO_TYPES.has(attachment.mimeType) && !PREVIEW_DOCUMENT_TYPES.has(attachment.mimeType) && !PREVIEW_MODEL_TYPES.has(attachment.mimeType))) return NextResponse.json({ error: "Preview is not supported for this file type" }, { status: 415 });
     const original = await getFile(attachment.s3Key);

@@ -134,6 +134,12 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     expect(result.evaluation.status).toBe("COMPLETED");
     const updatedTask = await (await teacher.request.get(`/api/tasks/${task.id}`)).json();
     expect(updatedTask.task.submissions[0].status).toBe("UNDER_REVIEW");
+    await teacher.goto(`/cs/subjects/${subject.id}/results`);
+    const pointsPreview = teacher.getByRole("button", { name: "85,00", exact: true });
+    await pointsPreview.hover();
+    const thumbnail = teacher.getByRole("img", { name: "Náhled odevzdané práce", exact: true });
+    await expect(thumbnail).toHaveAttribute("src", /\/api\/uploads\/[^?]+\?thumbnail=1$/);
+    await expect.poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
     await expect(reviewer.getByText("Načítání náhledu…", { exact: true })).toHaveCount(0);
     await reviewer.screenshot({ path: testInfo.outputPath("review-workspace.png"), fullPage: true });
     await reviewer.bringToFront();

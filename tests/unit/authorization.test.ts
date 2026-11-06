@@ -55,4 +55,12 @@ describe("object authorization", () => {
     await expect(canReadAttachment({ id: "student", role: "STUDENT" }, "attachment-1")).resolves.toBe(true);
     await expect(canManageEvaluation({ id: "evaluator", role: "EVALUATOR" }, "evaluation-1")).resolves.toBe(false);
   });
+  it("allows subject managers to request final work thumbnails without granting original file access", async () => {
+    const teacher = { id: "teacher", role: "TEACHER", organizationId: "school" };
+    await canReadAttachment(teacher, "attachment-1", true);
+    const thumbnailScope = { submission: { stage: "FINAL", task: { status: { in: ["PUBLISHED", "CLOSED"] }, isTemplate: false, subject: { teacherId: teacher.id, classes: { some: { class: { organizationId: "school" } } } } } } };
+    expect(dbMock.attachment.findFirst.mock.lastCall?.[0].where.OR).toContainEqual(thumbnailScope);
+    await canReadAttachment(teacher, "attachment-1");
+    expect(dbMock.attachment.findFirst.mock.lastCall?.[0].where.OR).not.toContainEqual(thumbnailScope);
+  });
 });

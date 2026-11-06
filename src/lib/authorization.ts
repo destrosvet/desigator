@@ -51,11 +51,12 @@ export async function canManageTask(user: AuthUser, id: string): Promise<boolean
   if (!canTeach(user)) return false;
   return Boolean(await db.task.findFirst({ where: { id, ...managedTaskScope(user) }, select: { id: true } }));
 }
-export async function canReadAttachment(user: AuthUser, id: string): Promise<boolean> {
+export async function canReadAttachment(user: AuthUser, id: string, thumbnail = false): Promise<boolean> {
   if (isAdmin(user)) return true;
   return Boolean(await db.attachment.findFirst({ where: { id, OR: [
     { task: visibleTaskScope(user) },
     { submission: { task: managedTaskScope(user) } },
+    ...(thumbnail && canTeach(user) ? [{ submission: { stage: "FINAL" as const, task: { status: { in: ["PUBLISHED", "CLOSED"] as ("PUBLISHED" | "CLOSED")[] }, isTemplate: false, subject: managedSubjectScope(user) } } }] : []),
     { submission: { studentId: user.id, task: { subject: { classes: { some: { class: { organizationId: schoolId(user) } } } } } } },
     ...(canEvaluate(user) ? [{ submission: { evaluations: { some: { evaluatorId: user.id } } } }] : []),
   ] }, select: { id: true } }));
