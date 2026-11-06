@@ -23,7 +23,7 @@ test("subject assignment includes future tasks and final submissions without per
   const reviewerContext = await browser.newContext({ baseURL });
   try {
     const owner = await ownerContext.newPage(); const reviewer = await reviewerContext.newPage();
-    await reviewer.goto("/cs/auth/login"); await reviewer.getByLabel("E-mail", { exact: true }).fill("evaluator@desigator.cz"); await reviewer.getByLabel("Heslo", { exact: true }).fill("evaluator123"); await reviewer.getByRole("button", { name: /Přihlásit/ }).click(); await expect(reviewer).toHaveURL(/dashboard/);
+    await reviewer.goto("/cs/auth/login"); await reviewer.getByLabel("E-mail", { exact: true }).fill("school-evaluator@desigator.cz"); await reviewer.getByLabel("Heslo", { exact: true }).fill("evaluator123"); await reviewer.getByRole("button", { name: /Přihlásit/ }).click(); await expect(reviewer).toHaveURL(/dashboard/);
     const { user } = await (await reviewer.request.get("/api/auth/session")).json();
     const { classes } = await (await owner.request.get("/api/classes")).json();
     const subjectResponse = await owner.request.post("/api/subjects", { data: { name: "Subject reviewers " + Date.now(), classId: classes[0].id, year: 2026 } });
@@ -31,7 +31,7 @@ test("subject assignment includes future tasks and final submissions without per
     const lookup = await owner.request.get(`/api/subjects/${subject.id}/evaluators?${new URLSearchParams({ search: user.email })}`);
     expect(lookup.status()).toBe(200);
     const candidate = (await lookup.json()).available.find((person: { id: string }) => person.id === user.id);
-    expect(candidate.organization?.name).toBeTruthy();
+    expect(candidate?.organization?.name).toBe("Externí škola hodnotitelů");
     await owner.goto(`/cs/subjects/${subject.id}`);
     await owner.getByLabel("Vyhledat hodnotitele", { exact: true }).fill(candidate.organization.name);
     const results = owner.getByRole("list", { name: "Nalezení hodnotitelé" });

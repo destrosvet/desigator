@@ -53,6 +53,24 @@ async function main() {
     console.log(`✅ Hodnotitel: evaluator@desigator.cz / evaluator123`);
   }
 
+  const reviewerSchool = await prisma.organization.upsert({
+    where: { id: "demo-reviewer-school" },
+    update: {},
+    create: { id: "demo-reviewer-school", name: "Externí škola hodnotitelů" },
+  });
+  await prisma.user.upsert({
+    where: { email: "school-evaluator@desigator.cz" },
+    update: { organizationId: reviewerSchool.id },
+    create: {
+      name: "Hodnotitel externí školy",
+      email: "school-evaluator@desigator.cz",
+      password: await bcrypt.hash("evaluator123", 12),
+      role: UserRole.EVALUATOR,
+      roles: [UserRole.EVALUATOR],
+      organizationId: reviewerSchool.id,
+    },
+  });
+
   // ===== STUDENTI =====
   const studentData = [
     { email: "student1@desigator.cz", externalId: "S001", name: "Student 1" },
