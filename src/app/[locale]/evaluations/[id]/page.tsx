@@ -42,14 +42,27 @@ export default async function EvaluationDetailPage({ params, searchParams }: { p
 
   const queue = await db.evaluation.findMany({
     where: filters ? evaluationWhere(session.user, filters) : { AND: [evaluationScope(session.user), { evaluatorId: evaluation.evaluatorId, submission: { taskId: evaluation.submission.taskId } }] },
-    select: { id: true, status: true, totalPoints: true, submission: { select: { student: { select: { name: true } } } } },
+    select: { id: true, evaluatorId: true, status: true, totalPoints: true, submission: { select: { taskId: true, student: { select: { name: true } } } } },
     orderBy: filters ? [{ createdAt: "desc" }, { id: "desc" }] : [{ submission: { student: { name: "asc" } } }, { id: "asc" }],
   });
 
   // Keep the open work usable when saving changes its status outside the active filter.
-  if (!queue.some(item => item.id === evaluation.id)) queue.unshift({ id: evaluation.id, status: evaluation.status, totalPoints: evaluation.totalPoints, submission: { student: { name: evaluation.submission.student.name } } });
+  if (!queue.some(item => item.id === evaluation.id)) queue.unshift({ id: evaluation.id, evaluatorId: evaluation.evaluatorId, status: evaluation.status, totalPoints: evaluation.totalPoints, submission: { taskId: evaluation.submission.taskId, student: { name: evaluation.submission.student.name } } });
+  const ownQueue = canEvaluate(session.user) ? queue.filter(item => item.evaluatorId === session.user.id) : [];
+  const scoreTasks = Object.fromEntries(ownQueue.map(item => [item.id, item.submission.taskId]));
+  const taskIds = [...new Set(Object.values(scoreTasks))];
+  const completedOutsideQueue = taskIds.length ? await db.evaluation.findMany({
+    where: { evaluatorId: session.user.id, status: "COMPLETED", totalPoints: { not: null }, submission: { taskId: { in: taskIds } } },
+    select: { id: true, totalPoints: true, submission: { select: { taskId: true } } },
+  }) : [];
+  const savedScores: Record<string, number[]> = {};
+  for (const item of completedOutsideQueue) {
+    if (scoreTasks[item.id] === undefined && item.totalPoints !== null) {
+      (savedScores[item.submission.taskId] ??= []).push(item.totalPoints);
+    }
+  }
   const anonymous = anonymousEvaluation(session.user);
   const visibleEvaluation = anonymous ? { ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } } : evaluation;
-  const visibleQueue = anonymous ? queue.map(({ submission: _submission, ...item }) => item) : queue;
-  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(visibleEvaluation))} queue={visibleQueue} gridHref={gridHref} navigationQuery={navigationQuery} statusFilter={filters?.status} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
+  const visibleQueue = queue.map(({ id, status, totalPoints, submission }) => ({ id, status, totalPoints, ...(anonymous ? {} : { submission: { student: submission.student } }) }));
+  return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(visibleEvaluation))} queue={visibleQueue} scoreTasks={scoreTasks} savedScores={savedScores} gridHref={gridHref} navigationQuery={navigationQuery} statusFilter={filters?.status} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
 }

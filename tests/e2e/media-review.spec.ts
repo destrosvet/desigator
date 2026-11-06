@@ -164,6 +164,8 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(2);
     // Direct-link keyboard navigation uses the default task order.
     await reviewer.goto(`/cs/evaluations/${evaluation.id}`);
+    const distribution = reviewer.getByRole("region", { name: "Rozložení mých bodů" });
+    await expect(distribution.getByText("Dokončená hodnocení za celé zadání · 1", { exact: true })).toBeVisible();
     await reviewer.getByRole("button", { name: "Další student", exact: true }).click();
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
     const slider = reviewer.getByRole("slider", { name: "Kompozice – posuvník", exact: true });
@@ -182,6 +184,9 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
     const secondResult = (await (await reviewer.request.get(`/api/evaluations/${secondId}`)).json()).evaluation;
     expect(secondResult.status).toBe("COMPLETED"); expect(secondResult.totalPoints).toBe(1);
+    await expect(distribution.getByText("Dokončená hodnocení za celé zadání · 2", { exact: true })).toBeVisible();
+    await distribution.getByText("Přesné četnosti bodů", { exact: true }).click();
+    await expect(distribution.getByRole("row", { name: "1 1", exact: true })).toBeVisible();
     await reviewer.getByRole("button", { name: "Další student", exact: true }).focus();
     await reviewer.keyboard.press("ArrowRight");
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
@@ -225,14 +230,22 @@ test("reviewer previews private images beside scoring, saves a draft and complet
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 1");
     await reviewer.getByLabel("Kompozice", { exact: true }).press("Control+Enter");
     await expect(reviewer.getByTestId("current-student")).toHaveText("Anonymní práce 2");
-    // The rating controls sit below the preview and stay centered on desktop and mobile.
+    // The histogram sits next to the rating controls on desktop and below them on mobile.
     const ratings = reviewer.locator('section[aria-label="Hodnocení práce"]');
     for (const width of [1440, 390]) {
       await reviewer.setViewportSize({ width, height: 900 });
       const box = (await ratings.boundingBox())!;
       const preview = (await reviewer.getByTestId("work-preview").boundingBox())!;
+      const chart = (await distribution.boundingBox())!;
       expect(box.y).toBeGreaterThanOrEqual(preview.y + preview.height);
-      expect(Math.abs(box.x + box.width / 2 - preview.x - preview.width / 2)).toBeLessThan(2);
+      if (width === 1440) {
+        expect(chart.x).toBeGreaterThanOrEqual(box.x + box.width);
+        expect(Math.abs(chart.y - box.y)).toBeLessThan(2);
+        expect(Math.abs((box.x + chart.x + chart.width) / 2 - preview.x - preview.width / 2)).toBeLessThan(2);
+      } else {
+        expect(chart.y).toBeGreaterThanOrEqual(box.y + box.height);
+        expect(Math.abs(box.x + box.width / 2 - preview.x - preview.width / 2)).toBeLessThan(2);
+      }
     }
   } finally { await Promise.all(contexts.map((context) => context.close())); }
 });

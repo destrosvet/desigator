@@ -1,5 +1,7 @@
 "use client";
 import { TaskAttachments } from "@/components/task-attachments";
+import { ReviewScoreDistribution } from "@/components/review-score-distribution";
+import { useMemo } from "react";
 
 import { useLocale, useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, Check, Grid2X2, Loader2 } from "lucide-react";
@@ -16,13 +18,21 @@ import type { ReviewQueueItem, ReviewWork } from "@/lib/review-workspace";
 
 const statusLabels: Record<string, string> = { PENDING: "Nehodnoceno", IN_PROGRESS: "Rozpracováno", COMPLETED: "Dokončeno" };
 
-export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdit, gridHref: returnHref, navigationQuery = "", statusFilter }: { evaluation: ReviewWork; queue: ReviewQueueItem[]; canEdit: boolean; gridHref?: string; navigationQuery?: string; statusFilter?: string }) {
+export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdit, scoreTasks, savedScores, gridHref: returnHref, navigationQuery = "", statusFilter }: { evaluation: ReviewWork; queue: ReviewQueueItem[]; canEdit: boolean; scoreTasks: Record<string, string>; savedScores: Record<string, number[]>; gridHref?: string; navigationQuery?: string; statusFilter?: string }) {
   const locale = useLocale();
   const publication = useTranslations("publication");
   const review = useReviewWorkspace(evaluation, initialQueue, locale, canEdit, navigationQuery, statusFilter);
-  const { work, form, queue, saving, navigating, error, message, change, goTo, persist, leave, fullyRated } = review;
+  const { work, form, queue, savedQueue, saving, navigating, error, message, change, goTo, persist, leave, fullyRated } = review;
   const editable = !form.readOnly;
   const { task, attachments, content } = work.submission;
+  const showDistribution = scoreTasks[work.id] === task.id;
+  const distribution = useMemo(() => {
+    const scores = [...(savedScores[task.id] ?? [])];
+    for (const item of savedQueue) {
+      if (scoreTasks[item.id] === task.id && item.status === "COMPLETED" && item.totalPoints !== null) scores.push(item.totalPoints);
+    }
+    return scores.filter(points => Number.isInteger(points) && points >= 0 && points <= task.maxPoints);
+  }, [savedScores, savedQueue, scoreTasks, task.id, task.maxPoints]);
   const index = queue.findIndex((item) => item.id === work.id);
   const previous = queue[index - 1];
   const next = queue[index + 1];
@@ -60,7 +70,8 @@ export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdi
       <WorkViewer key={work.id} attachments={attachments} compact />
     </section>
 
-    <section aria-label="Hodnocení práce" className="mx-auto w-full max-w-3xl rounded-xl border bg-card px-4 py-3 sm:px-6">
+    <div className={showDistribution ? "mx-auto grid w-full max-w-6xl items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" : "mx-auto w-full max-w-3xl"}>
+    <section aria-label="Hodnocení práce" className="min-w-0 rounded-xl border bg-card px-4 py-3 sm:px-6">
       {editable ? <p className="mb-3 text-xs text-muted-foreground">↑ / ↓ převezme body z naposledy otevřené, plně ohodnocené práce a nastaví celkem o bod více / méně. Komentáře zůstávají vlastní. Šipky fungují mimo vstupní pole a posuvníky.</p> : null}
       {form.readOnly ? <p role="status" className="mb-3 text-sm text-muted-foreground">{work.submission.resultsPublishedAt ? publication("locked") : "Toto hodnocení může upravit pouze přiřazený hodnotitel."}</p> : null}
       {!task.criteria.length ? <p role="alert" className="text-sm">Zadání nemá hodnoticí kritéria. Před hodnocením je musí doplnit učitel.</p> : null}
@@ -77,6 +88,8 @@ export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdi
       {invalid ? <p role="alert" className="mt-2 text-sm text-destructive">Zkontrolujte celé body a celkový limit zadání.</p> : null}
       {error ? <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 text-sm text-destructive"><p>{error} Přechod na jinou práci byl zastaven.</p><Button variant="outline" size="sm" onClick={() => void persist("draft")}>Zkusit uložit znovu</Button></div> : null}
     </section>
+    {showDistribution ? <ReviewScoreDistribution scores={distribution} maximum={task.maxPoints} /> : null}
+    </div>
 
     <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground"><p aria-label="Klávesové zkratky"><kbd>←</kbd> <kbd>→</kbd> přepínají práce · <kbd>Alt + ←/→</kbd> i ze slideru a formuláře · <kbd>Ctrl/⌘ + S</kbd> uloží koncept · <kbd>Ctrl/⌘ + Enter</kbd> dokončí a přejde dál</p><span>Hodnotí {work.evaluator.name}</span></div>
     <details className="rounded-lg border px-3 py-2"><summary className="cursor-pointer text-sm font-medium">Komentáře a zpětná vazba <span className="font-normal text-muted-foreground">(volitelné)</span></summary><div className="mt-3 grid gap-4 md:grid-cols-2">

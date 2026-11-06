@@ -183,5 +183,5 @@ export function useReviewWorkspace(initial: ReviewWork, initialQueue: ReviewQueu
     };
   }, [change, goTo, leave, persist, statusFilter]);
 
-  return { work, queue: matchingReviewQueue(queue, work.id, statusFilter), form, saving, navigating, error, message, change, persist, goTo, leave, fullyRated: isFullyRated(form) };
+  return { work, queue: matchingReviewQueue(queue, work.id, statusFilter), savedQueue: queue, form, saving, navigating, error, message, change, persist, goTo, leave, fullyRated: isFullyRated(form) };
 }
