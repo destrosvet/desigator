@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { canManageSubject } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { canEvaluate } from "@/lib/permissions";
-import { subjectEvaluatorSelection } from "@/lib/subject-detail";
+import { removableSubjectReviews, standaloneSubjectReviewers, subjectEvaluatorSelection } from "@/lib/subject-detail";
 
 const selection = subjectEvaluatorSelection;
 const eligible = { isActive: true, OR: [{ roles: { hasSome: ["ADMIN" as const, "EVALUATOR" as const] } }, { roles: { isEmpty: true }, role: { in: ["ADMIN" as const, "TEACHER" as const, "EVALUATOR" as const] } }] };
@@ -19,14 +19,15 @@ export async function GET(req: Request, { params }: Context) {
   const search = new URL(req.url).searchParams.get("search")?.trim() || "";
   if (search.length > 100) return NextResponse.json({ error: "Hledaný text může mít nejvýše 100 znaků." }, { status: 400 });
   const contains = { contains: search, mode: "insensitive" as const };
-  const [available, assigned] = await Promise.all([
+  const [available, assigned, standalone] = await Promise.all([
     search.length < 2 ? Promise.resolve([]) : db.user.findMany({
       where: { AND: [eligible, { evaluatedSubjects: { none: { subjectId: id } } }, { OR: [{ name: contains }, { email: contains }, { institution: contains }, { organization: { name: contains } }] }] },
       select: selection, orderBy: [{ name: "asc" }, { id: "asc" }], take: 21,
     }),
     db.subjectEvaluator.findMany({ where: { subjectId: id }, select: { evaluator: { select: selection } }, orderBy: { evaluator: { name: "asc" } } }),
+    standaloneSubjectReviewers(id),
   ]);
-  return NextResponse.json({ available: available.slice(0, 20), hasMore: available.length > 20, assigned: assigned.map(a => a.evaluator) }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ available: available.slice(0, 20), hasMore: available.length > 20, assigned: [...assigned.map(a => a.evaluator), ...standalone] }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Context) {
@@ -46,16 +47,28 @@ export async function DELETE(req: Request, { params }: Context) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = z.object({ evaluatorId: z.string().min(1) }).safeParse(await req.json().catch(() => null));
+  const body = z.object({ evaluatorId: z.string().min(1), deleteReviews: z.boolean().default(false) }).safeParse(await req.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "Vyberte hodnotitele." }, { status: 400 });
-  const evaluatorId = body.data.evaluatorId;
-  if (!(evaluatorId === session.user.id && canEvaluate(session.user)) && !(await canManageSubject(session.user, id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { evaluatorId, deleteReviews } = body.data;
+  const selfWithdrawal = !deleteReviews && evaluatorId === session.user.id && canEvaluate(session.user);
+  if (!selfWithdrawal && !(await canManageSubject(session.user, id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const removed = await db.$transaction(async tx => {
     // Use the same task locks as automatic assignment and starting a review.
     const tasks = await tx.task.findMany({ where: { subjectId: id }, select: { id: true }, orderBy: { id: "asc" } });
     for (const task of tasks) await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${task.id} FOR UPDATE`;
     await tx.subjectEvaluator.deleteMany({ where: { subjectId: id, evaluatorId } });
-    return tx.evaluation.deleteMany({ where: { evaluatorId, submission: { task: { subjectId: id, resultsPublishedAt: null }, resultsPublishedAt: null }, status: "PENDING", totalPoints: null, evaluatedAt: null, OR: [{ feedback: null }, { feedback: "" }], scores: { none: {} } } });
+    if (!deleteReviews) return tx.evaluation.deleteMany({ where: { evaluatorId, ...removableSubjectReviews(id) } });
+
+    const where = { evaluatorId, submission: { task: { subjectId: id } } };
+    const reviews = await tx.evaluation.findMany({ where, select: { submissionId: true } });
+    const deleted = await tx.evaluation.deleteMany({ where });
+    if (reviews.length) {
+      const affected = { id: { in: reviews.map(review => review.submissionId) }, status: { not: "RETURNED" as const } };
+      await tx.submission.updateMany({ where: { ...affected, evaluations: { none: {} } }, data: { status: "SUBMITTED" } });
+      await tx.submission.updateMany({ where: { ...affected, evaluations: { some: { status: { not: "COMPLETED" } } } }, data: { status: "UNDER_REVIEW" } });
+      await tx.submission.updateMany({ where: { ...affected, evaluations: { some: {}, every: { status: "COMPLETED" } } }, data: { status: "EVALUATED" } });
+    }
+    return deleted;
   }, { timeout: 20000 });
   return NextResponse.json({ success: true, removed: removed.count });
 }

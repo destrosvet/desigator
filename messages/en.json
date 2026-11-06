@@ -271,7 +271,7 @@
     "invalidPoints": "Enter a non-zero amount with up to two decimal places (maximum ±10,000).",
     "apply": "Save and apply adjustment",
     "applyHelp": "The adjustment immediately affects results based on published reviews too. Original task evaluations stay the same.",
-    "explanation": "Latest final versions are shown with two decimal places. Unpublished results are marked. The margin shows the boundary that still retains the current grade; falling below it results in a worse grade.",
+    "explanation": "Each task average uses completed reviews of the latest final version. Results are provisional while any reviews are outstanding. Unpublished results are marked.",
     "studentExplanation": "Your published results and final grade including point adjustments.",
     "failed": "Could not save the change.",
     "revoked": "Revoked",

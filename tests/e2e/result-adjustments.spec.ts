@@ -13,11 +13,16 @@ test("teacher decimal overview, private and visible corrections, student isolati
  const classroom=await db.class.create({data:{name:"Adjustment test class",code:randomUUID(),teacherId:teacher.id,organizationId:school.id,students:{create:students.map(student=>({studentId:student.id}))}}});
  const subject=await db.subject.create({data:{name:"Decimal assessment",year:2026,classId:classroom.id,classes:{create:{classId:classroom.id}},teacherId:teacher.id}});
  const task=await db.task.create({data:{title:"Final portfolio",maxPoints:100,status:"PUBLISHED",subjectId:subject.id,creatorId:teacher.id}});
- await db.submission.create({data:{taskId:task.id,studentId:students[0].id,stage:"FINAL",resultsPublishedAt:new Date(),resultsPublishedById:teacher.id,evaluations:{create:reviewers.map((reviewer,i)=>({evaluatorId:reviewer.id,status:"COMPLETED",totalPoints:i?90:89}))}}});
+ const work=await db.submission.create({data:{taskId:task.id,studentId:students[0].id,stage:"FINAL",evaluations:{create:reviewers.map((reviewer,i)=>({evaluatorId:reviewer.id,status:i===0?"PENDING":"COMPLETED",totalPoints:i===0?null:i===1?89:90}))}}});
  const tc=await browser.newContext({baseURL}),sc=await browser.newContext({baseURL}),ac=await browser.newContext({baseURL}),oc=await browser.newContext({baseURL});
  try{
  const teacherPage=await tc.newPage(),studentPage=await sc.newPage(),otherPage=await oc.newPage(),anon=await ac.newPage();await login(teacherPage,teacher.email);await login(studentPage,students[0].email);await login(otherPage,students[1].email);
  const route="/cs/subjects/"+subject.id+"/results",api="/api/subjects/"+subject.id+"/results",adjustments="/api/subjects/"+subject.id+"/adjustments";
+ const preview=await(await teacherPage.request.get(api)).json();
+ expect(preview.rows.find((row:{studentId:string})=>row.studentId===students[0].id)).toMatchObject({total:89.75,publishedTotal:0,provisional:true});
+ const privateResult=await(await studentPage.request.get(api)).json();expect(privateResult.rows[0].cells[0]).toMatchObject({points:null,published:false});
+ await db.evaluation.update({where:{submissionId_evaluatorId:{submissionId:work.id,evaluatorId:teacher.id}},data:{status:"COMPLETED",totalPoints:90}});
+ await db.submission.update({where:{id:work.id},data:{resultsPublishedAt:new Date(),resultsPublishedById:teacher.id}});
  expect((await anon.request.get(api)).status()).toBe(401);expect((await studentPage.request.post(adjustments,{data:{}})).status()).toBe(403);
  const share=await(await teacherPage.request.patch("/api/classes/"+classroom.id+"/public-results",{data:{enabled:true}})).json();const publicApi="/api/public/results/"+share.token;
  await teacherPage.goto(route);let row=teacherPage.getByRole("row").filter({has:teacherPage.getByRole("rowheader",{name:/Adjusted student/})});await expect(row.getByText("K A chybí 0,20 b.",{exact:true})).toBeVisible();await expect(row.getByRole("cell",{name:"B",exact:true})).toBeVisible();

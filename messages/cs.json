@@ -271,7 +271,7 @@
     "invalidPoints": "Zadejte nenulovou částku s nejvýše dvěma desetinnými místy (max. ±10 000).",
     "apply": "Uložit a použít korekci",
     "applyHelp": "Korekce se ihned započítá i do výsledku ze zveřejněných hodnocení. Původní hodnocení úkolů se nemění.",
-    "explanation": "Body z posledních finálních verzí jsou uvedeny na dvě desetinná místa. Nezveřejněné výsledky jsou označené. Rezerva ukazuje hranici, na které ještě zůstává současná známka; pokles pod ni znamená horší známku.",
+    "explanation": "Průměr za úkol vychází z dokončených hodnocení poslední finální verze. Dokud některá hodnocení chybí, je výsledek průběžný. Nezveřejněné výsledky jsou označené.",
     "studentExplanation": "Zobrazeny jsou vaše zveřejněné výsledky a výsledná známka včetně bodových korekcí.",
     "failed": "Změnu se nepodařilo uložit.",
     "revoked": "Stornováno",

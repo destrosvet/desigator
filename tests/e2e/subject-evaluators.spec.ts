@@ -64,6 +64,20 @@ test("subject assignment includes future tasks and final submissions without per
     const author = students[0];
     const upload = await owner.request.post("/api/submissions/bulk-upload", { multipart: { taskId: task.id, stage: "FINAL", confirmed: "true", studentIds: JSON.stringify([author.id]), files: { name: author.externalId + ".png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9WQAAAAASUVORK5CYII=", "base64") } } });
     expect(upload.status()).toBe(200);
+    const adminLookup = await owner.request.get(`/api/subjects/${subject.id}/evaluators?search=admin%40desigator.cz`);
+    const admin = (await adminLookup.json()).available.find((person: { email: string }) => person.email === "admin@desigator.cz");
+    const { task: uploadedTask } = await (await owner.request.get(`/api/tasks/${task.id}`)).json();
+    expect((await owner.request.post("/api/evaluations", { data: { submissionId: uploadedTask.submissions[0].id, evaluatorId: admin.id } })).status()).toBe(201);
+    await owner.reload();
+    const adminRow = assigned.getByRole("row").filter({ hasText: admin.email });
+    await expect(adminRow).toContainText("Samostatná hodnocení");
+    await adminRow.getByRole("button", { name: `Odebrat ${admin.name} z hodnocení předmětu`, exact: true }).click();
+    const removal = owner.getByRole("dialog", { name: "Odebrat hodnotitele z předmětu" });
+    await expect(removal.getByRole("checkbox")).not.toBeChecked();
+    await removal.getByRole("button", { name: "Potvrdit odebrání", exact: true }).click();
+    await expect(adminRow).toHaveCount(0);
+    const { task: cleanedTask } = await (await owner.request.get(`/api/tasks/${task.id}`)).json();
+    expect(cleanedTask.submissions[0].evaluations).toEqual([]);
     await reviewer.goto("/cs/dashboard");
     await reviewer.getByRole("link", { name: "Předměty a zbývající hodnocení", exact: true }).click();
     await reviewer.getByRole("link").filter({ has: reviewer.getByRole("heading", { name: subject.name, exact: true }) }).click();
@@ -79,6 +93,7 @@ test("subject assignment includes future tasks and final submissions without per
     await expect(reviewer.getByRole("link", { name: /^Hodnotit / })).toHaveCount(1);
     // Managers can remove untouched assignments; opening the workspace must not recreate them.
     await owner.getByRole("button", { name: `Odebrat ${user.name} z hodnocení předmětu`, exact: true }).click();
+    await removal.getByRole("button", { name: "Potvrdit odebrání", exact: true }).click();
     await expect(owner.getByRole("status")).toContainText("nevyplněná hodnocení byla odebrána");
     expect((await (await reviewer.request.get(`/api/evaluations?taskId=${task.id}`)).json()).total).toBe(0);
     expect((await owner.request.post(`/api/subjects/${subject.id}/evaluators`, { data: { evaluatorId: user.id } })).status()).toBe(200);
@@ -95,5 +110,12 @@ test("subject assignment includes future tasks and final submissions without per
     await owner.goto(`/cs/subjects/${subject.id}/results`);
     await owner.getByText("Hodnocení jednotlivých hodnotitelů", { exact: true }).click();
     await expect(owner.getByRole("list").filter({ hasText: user.name })).toContainText("80,00 b.");
+    await owner.goto(`/cs/subjects/${subject.id}`);
+    await owner.getByRole("button", { name: `Odebrat ${user.name} z hodnocení předmětu`, exact: true }).click();
+    await removal.getByRole("checkbox").check();
+    await removal.getByRole("button", { name: "Odebrat a smazat hodnocení", exact: true }).click();
+    await expect(removal).toBeHidden();
+    expect((await reviewer.request.get(`/api/evaluations/${reviewId}`)).status()).toBe(404);
+    expect((await (await owner.request.get(`/api/evaluations?taskId=${task.id}`)).json()).total).toBe(1);
   } finally { await ownerContext.close(); await reviewerContext.close(); }
 });

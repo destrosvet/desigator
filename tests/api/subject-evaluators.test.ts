@@ -9,8 +9,11 @@ const context = { params: Promise.resolve({ id: "subject" }) };
 const request = (data: unknown = { evaluatorId: "external" }) => new Request("http://localhost/api/subjects/subject/evaluators", { method: "POST", body: JSON.stringify(data) });
 describe("subject evaluator management", () => {
   function setupRemoval() {
+    const findReviews = vi.fn().mockResolvedValue([{ submissionId: "work" }]);
+    const updateSubmissions = vi.fn();
     m.tasks.mockResolvedValue([{ id: "task" }]); m.removeReviews.mockResolvedValue({ count: 3 });
-    m.transaction.mockImplementation(async run => run({ task: { findMany: m.tasks }, $queryRaw: m.lock, subjectEvaluator: { deleteMany: m.removeAssignment }, evaluation: { deleteMany: m.removeReviews } }));
+    m.transaction.mockImplementation(async run => run({ task: { findMany: m.tasks }, $queryRaw: m.lock, subjectEvaluator: { deleteMany: m.removeAssignment }, evaluation: { findMany: findReviews, deleteMany: m.removeReviews }, submission: { updateMany: updateSubmissions } }));
+    return { findReviews, updateSubmissions };
   }
   it("lets managers remove assignments and only untouched unpublished reviews", async () => {
     setupRemoval();
@@ -19,6 +22,18 @@ describe("subject evaluator management", () => {
     expect(m.removeAssignment).toHaveBeenCalledWith({ where: { subjectId: "subject", evaluatorId: "external" } });
     expect(m.removeReviews).toHaveBeenCalledWith({ where: { evaluatorId: "external", submission: { task: { subjectId: "subject", resultsPublishedAt: null }, resultsPublishedAt: null }, status: "PENDING", totalPoints: null, evaluatedAt: null, OR: [{ feedback: null }, { feedback: "" }], scores: { none: {} } } });
     expect(m.lock).toHaveBeenCalledTimes(1);
+  });
+  it("deletes all reviews in this subject only with explicit manager authorization", async () => {
+    const { findReviews, updateSubmissions } = setupRemoval();
+    m.manage.mockResolvedValueOnce(false);
+    const purge = () => request({ evaluatorId: "owner", deleteReviews: true });
+    expect((await DELETE(purge(), context)).status).toBe(403);
+    expect(m.transaction).not.toHaveBeenCalled();
+    expect((await DELETE(purge(), context)).status).toBe(200);
+    const where = { evaluatorId: "owner", submission: { task: { subjectId: "subject" } } };
+    expect(findReviews).toHaveBeenCalledWith({ where, select: { submissionId: true } });
+    expect(m.removeReviews).toHaveBeenCalledWith({ where });
+    expect(updateSubmissions).toHaveBeenCalledTimes(3);
   });
   it("permits self-withdrawal but prevents removing another reviewer without management", async () => {
     setupRemoval(); m.manage.mockResolvedValue(false); m.session.mockResolvedValue({ user: { id: "external", role: "EVALUATOR" } });
@@ -57,7 +72,10 @@ describe("subject evaluator management", () => {
       const response = await GET(new Request("http://localhost/api/subjects/subject/evaluators?" + new URLSearchParams({ search })), context);
       expect((await response.json()).available).toEqual([]);
     }
-    expect(m.users).not.toHaveBeenCalled();
+    expect(m.users).toHaveBeenCalledTimes(3);
+    for (const [args] of m.users.mock.calls) {
+      expect(args.where).toMatchObject({ evaluatedSubjects: { none: { subjectId: "subject" } }, evaluations: { some: { submission: { task: { subjectId: "subject" } } } } });
+    }
   });
   it("searches name, email, institution and actual organization while excluding assigned users", async () => {
     await GET(new Request("http://localhost/api/subjects/subject/evaluators?search=%20School%20"), context);

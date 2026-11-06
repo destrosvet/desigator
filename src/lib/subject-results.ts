@@ -19,7 +19,12 @@ export async function subjectResults(user:AuthUser,id:string){
  const scale=parseGradingScale(subject.classes[0].class.organization.gradingScale),maximum=tasks.reduce((sum,t)=>sum+t.maxPoints,0);
  const rows=members.map(({student})=>{
  const own=adjustments.filter(a=>a.studentId===student.id),active=own.filter(a=>!a.revokedAt);
- const cells=tasks.map(task=>{const work=task.submissions.find(s=>s.studentId===student.id);return {points:work?publishedAverage(visibleResultReviews(work.evaluations,Boolean(task.resultsPublishedAt)),task.maxPoints):null,pending:Boolean(task.resultsPublishedAt&&work?.evaluations.some(review=>review.status!=="COMPLETED")),published:Boolean(work&&(work.resultsPublishedAt||task.resultsPublishedAt)),...(teacher?{reviews:work?.evaluations.map(review=>({evaluatorId:review.evaluator?.id??"",name:review.evaluator?.name??"Hodnotitel",status:review.status,points:review.totalPoints}))??[]}: {})};});
+ const cells=tasks.map(task=>{
+ const work=task.submissions.find(s=>s.studentId===student.id);
+ const reviews=work?.evaluations??[];
+ const countedReviews=teacher?reviews.filter(review=>review.status==="COMPLETED"):visibleResultReviews(reviews,Boolean(task.resultsPublishedAt));
+ return {points:publishedAverage(countedReviews,task.maxPoints),pending:Boolean((teacher||task.resultsPublishedAt)&&reviews.some(review=>review.status!=="COMPLETED")),published:Boolean(work&&(work.resultsPublishedAt||task.resultsPublishedAt)),...(teacher?{reviews:reviews.map(review=>({evaluatorId:review.evaluator?.id??"",name:review.evaluator?.name??"Hodnotitel",status:review.status,points:review.totalPoints}))}: {})};
+ });
  const base=Math.round(cells.reduce((sum,c)=>sum+(c.points??0),0)*100)/100,total=adjustedTotal(base,active),grade=finalGrade(total,maximum,scale);
  const publicBase=Math.round(tasks.reduce((sum,task)=>{const work=task.submissions.find(s=>s.studentId===student.id&&(s.resultsPublishedAt||task.resultsPublishedAt));return sum+(work?publishedAverage(visibleResultReviews(work.evaluations,Boolean(task.resultsPublishedAt)),task.maxPoints)??0:0);},0)*100)/100;
  const common={studentId:student.id,name:student.name,externalId:student.externalId,cells:cells.map(c=>({points:c.points===null?null:Math.round(c.points*100)/100,published:c.published,...(teacher?{reviews:c.reviews}: {})})),total,grade,provisional:cells.some(c=>c.points===null||c.pending),visibleAdjustments:studentVisibleAdjustments(own)};

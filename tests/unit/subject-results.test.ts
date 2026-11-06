@@ -32,6 +32,12 @@ describe("subject result review breakdown", () => {
     expect(result!.rows[0].cells[0]).not.toHaveProperty("reviews");
     expect(m.tasks.mock.calls[0][0].select.submissions.select.evaluations.select).not.toHaveProperty("evaluator");
   });
+  it("counts completed unpublished reviews in the teacher's provisional total only", async () => {
+    const [task] = await m.tasks();
+    m.tasks.mockResolvedValue([{ ...task, resultsPublishedAt: null }]);
+    const result = await subjectResults({ id: "teacher", role: "TEACHER" }, "subject");
+    expect(result!.rows[0]).toMatchObject({ base: 70, total: 70, publishedTotal: 0, provisional: true, cells: [{ points: 70, published: false }] });
+  });
   it("does not grant the results overview to an external evaluator", async () => {
     m.manage.mockResolvedValue(false);
     expect(await subjectResults({ id: "reviewer", role: "EVALUATOR" }, "subject")).toBeNull();
