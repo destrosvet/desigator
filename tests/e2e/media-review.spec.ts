@@ -241,6 +241,7 @@ test("reviewer previews private images beside scoring, saves a draft and complet
       if (width === 1440) {
         expect(chart.x).toBeGreaterThanOrEqual(box.x + box.width);
         expect(Math.abs(chart.y - box.y)).toBeLessThan(2);
+        expect(Math.abs(chart.height - box.height)).toBeLessThan(2);
         expect(Math.abs((box.x + chart.x + chart.width) / 2 - preview.x - preview.width / 2)).toBeLessThan(2);
       } else {
         expect(chart.y).toBeGreaterThanOrEqual(box.y + box.height);

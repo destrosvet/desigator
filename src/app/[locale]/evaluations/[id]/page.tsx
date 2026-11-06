@@ -1,10 +1,10 @@
-import { anonymousEvaluation, canEvaluate, isAdmin } from "@/lib/permissions";
+import { anonymousEvaluation, canEvaluate, canTeach, isAdmin } from "@/lib/permissions";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EvaluationDetailClient } from "./evaluation-detail-client";
-import { evaluationQuerySchema, evaluationWhere, evaluationScope } from "@/lib/evaluations";
+import { evaluationQuerySchema, evaluationWhere, evaluationScope, shuffleReviewOrder } from "@/lib/evaluations";
 import { anonymousAttachmentName } from "@/lib/media";
 import { reviewFilterQuery } from "@/lib/review-filters";
 
@@ -63,6 +63,7 @@ export default async function EvaluationDetailPage({ params, searchParams }: { p
   }
   const anonymous = anonymousEvaluation(session.user);
   const visibleEvaluation = anonymous ? { ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } } : evaluation;
-  const visibleQueue = queue.map(({ id, status, totalPoints, submission }) => ({ id, status, totalPoints, ...(anonymous ? {} : { submission: { student: submission.student } }) }));
+  const orderedQueue = filters && (canEvaluate(session.user) || canTeach(session.user)) ? shuffleReviewOrder(queue, session.user.id) : queue;
+  const visibleQueue = orderedQueue.map(({ id, status, totalPoints, submission }) => ({ id, status, totalPoints, ...(anonymous ? {} : { submission: { student: submission.student } }) }));
   return <EvaluationDetailClient key={evaluation.id} evaluation={JSON.parse(JSON.stringify(visibleEvaluation))} queue={visibleQueue} scoreTasks={scoreTasks} savedScores={savedScores} gridHref={gridHref} navigationQuery={navigationQuery} statusFilter={filters?.status} canEdit={isAdmin(session.user) || (canEvaluate(session.user) && evaluation.evaluatorId === session.user.id)} />;
 }

@@ -70,7 +70,7 @@ export function EvaluationDetailClient({ evaluation, queue: initialQueue, canEdi
       <WorkViewer key={work.id} attachments={attachments} compact />
     </section>
 
-    <div className={showDistribution ? "mx-auto grid w-full max-w-6xl items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" : "mx-auto w-full max-w-3xl"}>
+    <div className={showDistribution ? "mx-auto grid w-full max-w-6xl items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" : "mx-auto w-full max-w-3xl"}>
     <section aria-label="Hodnocení práce" className="min-w-0 rounded-xl border bg-card px-4 py-3 sm:px-6">
       {editable ? <p className="mb-3 text-xs text-muted-foreground">↑ / ↓ převezme body z naposledy otevřené, plně ohodnocené práce a nastaví celkem o bod více / méně. Komentáře zůstávají vlastní. Šipky fungují mimo vstupní pole a posuvníky.</p> : null}
       {form.readOnly ? <p role="status" className="mb-3 text-sm text-muted-foreground">{work.submission.resultsPublishedAt ? publication("locked") : "Toto hodnocení může upravit pouze přiřazený hodnotitel."}</p> : null}

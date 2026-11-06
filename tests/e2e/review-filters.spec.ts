@@ -35,8 +35,14 @@ test("review navigation and return preserve the grid filter across saving and re
   const result = await (await reviewer.request.get("/api/evaluations?" + filters)).json();
   expect(result.total).toBe(2);
   const firstId = result.evaluations[0].id;
+  const secondId = result.evaluations[1].id;
+  for (const [index, id] of [firstId, secondId].entries()) {
+    const paged = await (await reviewer.request.get(`/api/evaluations?${filters}&limit=1&page=${index + 1}`)).json();
+    expect(paged.evaluations.map((item: { id: string }) => item.id)).toEqual([id]);
+  }
   const page = await reviewer.newPage();
   await page.goto("/cs/evaluations?" + filters);
+  await expect(page.getByRole("link", { name: /^Hodnotit / }).first()).toHaveAttribute("href", new RegExp(`/evaluations/${firstId}\\?`));
   await page.locator('a[href*="/evaluations/' + firstId + '?"]').click();
   await expect(page.getByLabel("Pořadí práce", { exact: true })).toHaveText("1 / 2");
   await page.reload();
@@ -47,7 +53,7 @@ test("review navigation and return preserve the grid filter across saving and re
   await expect(page.getByRole("button", { name: "Předchozí student", exact: true })).toBeDisabled();
   expect(new URL(page.url()).searchParams.get("status")).toBe("PENDING");
   const nextId = new URL(page.url()).pathname.split("/").pop()!;
-  expect(nextId).not.toBe(reviewIds[1]);
+  expect(nextId).toBe(secondId);
   expect((await (await reviewer.request.get("/api/evaluations/" + firstId)).json()).evaluation.status).toBe("COMPLETED");
   await page.reload();
   await expect(page.getByLabel("Pořadí práce", { exact: true })).toHaveText("1 / 1");

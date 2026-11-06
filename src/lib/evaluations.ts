@@ -1,4 +1,5 @@
 import { managedTaskScope } from "@/lib/authorization";
+import { createHash } from "node:crypto";
 import { isAdmin, canEvaluate, canTeach, hasRole } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -47,12 +48,23 @@ export function evaluationWhere(user: AuthUser, query: z.infer<typeof evaluation
   ] };
 }
 
+export function shuffleReviewOrder<T extends { id: string }>(reviews: T[], evaluatorId: string): T[] {
+  return reviews.map(review => ({
+    review,
+    rank: createHash("sha256").update(evaluatorId).update(":").update(review.id).digest("hex"),
+  })).sort((a, b) => a.rank.localeCompare(b.rank)).map(({ review }) => review);
+}
+
 export async function listEvaluations(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>) {
   const { page, limit } = query;
   const where = evaluationWhere(user, query);
+  const shuffled = canEvaluate(user) || canTeach(user)
+    ? shuffleReviewOrder(await db.evaluation.findMany({ where, select: { id: true } }), user.id)
+    : undefined;
+  const pageIds = shuffled?.slice((page - 1) * limit, page * limit).map(item => item.id);
   const [evaluations, total] = await Promise.all([
     db.evaluation.findMany({
-      where,
+      where: pageIds ? { AND: [where, { id: { in: pageIds } }] } : where,
       select: {
         id: true, status: true, totalPoints: true, evaluatedAt: true,
         evaluator: { select: { id: true, name: true } },
@@ -63,10 +75,11 @@ export async function listEvaluations(user: AuthUser, query: z.infer<typeof eval
           task: { select: { id: true, title: true, maxPoints: true, subject: { select: { name: true } } } },
         } },
       },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * limit, take: limit,
+      ...(pageIds ? {} : { orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * limit, take: limit }),
     }),
-    db.evaluation.count({ where }),
+    shuffled?.length ?? db.evaluation.count({ where }),
   ]);
   const anonymous = anonymousEvaluation(user);
-  return { evaluations: evaluations.map((evaluation) => anonymous ? ({ ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } }) : evaluation), total, page, limit };
+  const ordered = pageIds ? shuffleReviewOrder(evaluations, user.id) : evaluations;
+  return { evaluations: ordered.map((evaluation) => anonymous ? ({ ...evaluation, submission: { ...evaluation.submission, student: undefined, attachments: evaluation.submission.attachments.map((file, index) => ({ ...file, originalName: anonymousAttachmentName(file.originalName, index) })) } }) : evaluation), total, page, limit };
 }
