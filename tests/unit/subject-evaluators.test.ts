@@ -3,7 +3,7 @@ const m = vi.hoisted(() => ({ assignments: vi.fn(), transaction: vi.fn(), tasks:
 vi.mock("@/lib/db", () => ({ db: { subjectEvaluator: { findMany: m.assignments }, $transaction: m.transaction } }));
 vi.mock("@/lib/result-publication", () => ({ lockedPublicationDate: m.published }));
 import { syncSubjectEvaluations } from "@/lib/subject-evaluators";
-const user = { id: "external", role: "TEACHER", roles: ["TEACHER", "EVALUATOR"], organizationId: "other-school" };
+const user = { id: "external", role: "EVALUATOR", roles: ["EVALUATOR"], organizationId: "other-school" };
 describe("subject review assignments", () => {
   beforeEach(() => {
     vi.resetAllMocks(); m.assignments.mockResolvedValue([{ subjectId: "subject" }]); m.tasks.mockResolvedValue([{ id: "task" }]);
@@ -12,14 +12,24 @@ describe("subject review assignments", () => {
     m.transaction.mockImplementation(async run => run({ $queryRaw: m.lock, task: { findMany: m.tasks, findFirst: m.task }, submission: { findMany: m.versions }, evaluation: { createMany: m.create } }));
   });
   it("does not grant assignments to students or teachers whose evaluator role was revoked", async () => {
-    await syncSubjectEvaluations({ ...user, roles: ["TEACHER"] }); await syncSubjectEvaluations({ id: "student", role: "STUDENT" });
+    await syncSubjectEvaluations({ ...user, role: "TEACHER", roles: ["TEACHER"] }); await syncSubjectEvaluations({ id: "student", role: "STUDENT" });
     expect(m.assignments).not.toHaveBeenCalled(); expect(m.transaction).not.toHaveBeenCalled();
   });
   it("only scans subjects explicitly assigned to this evaluator, across schools", async () => {
     await syncSubjectEvaluations(user);
     expect(m.assignments.mock.calls[0][0].where.evaluatorId).toBe("external");
-    expect(m.tasks.mock.calls[0][0].where).toEqual({ subjectId: { in: ["subject"] }, status: { in: ["PUBLISHED", "CLOSED"] } });
-    expect(m.task.mock.calls[0][0].where.subject.evaluators).toEqual({ some: { evaluatorId: "external" } });
+    const where = { status: { in: ["PUBLISHED", "CLOSED"] }, OR: [{ subjectId: { in: ["subject"] }, subject: { isActive: true, evaluators: { some: { evaluatorId: "external" } } } }] };
+    expect(m.tasks.mock.calls[0][0].where).toEqual(where);
+    expect(m.task.mock.calls[0][0].where).toEqual({ ...where, id: "task" });
+  });
+  it("prepares reviews for a teacher's own published tasks without a subject assignment", async () => {
+    m.assignments.mockResolvedValue([]);
+    m.versions.mockResolvedValue([{ id: "final", studentId: "student", stage: "FINAL" }]);
+    await syncSubjectEvaluations({ id: "teacher", role: "TEACHER", roles: ["TEACHER", "EVALUATOR"], organizationId: "school" });
+    const where = { status: { in: ["PUBLISHED", "CLOSED"] }, OR: [{ creatorId: "teacher", subject: { classes: { some: { class: { organizationId: "school" } } } }, submissions: { some: { stage: "FINAL" } } }] };
+    expect(m.tasks.mock.calls[0][0].where).toEqual(where);
+    expect(m.task.mock.calls[0][0].where).toEqual({ ...where, id: "task" });
+    expect(m.create).toHaveBeenCalledWith({ data: [{ submissionId: "final", evaluatorId: "teacher" }], skipDuplicates: true });
   });
   it("includes new final versions but excludes WIP, older finals and individually published results", async () => {
     m.versions.mockResolvedValue([{ id: "a2", studentId: "a", stage: "WIP" }, { id: "a1", studentId: "a", stage: "FINAL" }, { id: "b2", studentId: "b", stage: "FINAL" }, { id: "b1", studentId: "b", stage: "FINAL" }, { id: "c1", studentId: "c", stage: "FINAL", resultsPublishedAt: new Date() }]);

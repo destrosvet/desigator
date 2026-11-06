@@ -2,19 +2,32 @@ import { db } from "@/lib/db";
 import { canEvaluate, type PermissionUser } from "@/lib/permissions";
 import { rubricError } from "@/lib/task-validation";
 import { lockedPublicationDate } from "@/lib/result-publication";
+import { managedTaskScope } from "@/lib/authorization";
+import type { Prisma } from "@prisma/client";
 
 // Refresh on entry to the review workspace so future tasks and submissions are
 // included too. Existing scores and completed reviews are never overwritten.
 export async function syncSubjectEvaluations(user: PermissionUser) {
   if (!canEvaluate(user)) return;
   const assignments = await db.subjectEvaluator.findMany({ where: { evaluatorId: user.id, subject: { isActive: true }, evaluator: { isActive: true } }, select: { subjectId: true } });
-  if (!assignments.length) return;
+  const eligibleTasks: Prisma.TaskWhereInput[] = [];
+  if (assignments.length) {
+    eligibleTasks.push({
+      subjectId: { in: assignments.map(assignment => assignment.subjectId) },
+      subject: { isActive: true, evaluators: { some: { evaluatorId: user.id } } },
+    });
+  }
+  if (user.role === "TEACHER") {
+    eligibleTasks.push({ ...managedTaskScope(user), creatorId: user.id, submissions: { some: { stage: "FINAL" } } });
+  }
+  if (!eligibleTasks.length) return;
+  const where: Prisma.TaskWhereInput = { status: { in: ["PUBLISHED", "CLOSED"] }, OR: eligibleTasks };
   await db.$transaction(async (tx) => {
     // Serialize with rubric edits and publication, in a stable task order.
-    const tasks = await tx.task.findMany({ where: { subjectId: { in: assignments.map(a => a.subjectId) }, status: { in: ["PUBLISHED", "CLOSED"] } }, select: { id: true }, orderBy: { id: "asc" } });
+    const tasks = await tx.task.findMany({ where, select: { id: true }, orderBy: { id: "asc" } });
     for (const { id } of tasks) {
       await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${id} FOR UPDATE`;
-      const task = await tx.task.findFirst({ where: { id, status: { in: ["PUBLISHED", "CLOSED"] }, subject: { isActive: true, evaluators: { some: { evaluatorId: user.id } } } }, include: { criteria: true } });
+      const task = await tx.task.findFirst({ where: { ...where, id }, include: { criteria: true } });
       if (!task || rubricError(task.criteria, task.maxPoints, true)) continue;
       const versions = await tx.submission.findMany({ where: { taskId: id }, orderBy: [{ studentId: "asc" }, { version: "desc" }], select: { id: true, studentId: true, stage: true, resultsPublishedAt: true } });
       const seen = new Set<string>();

@@ -6,9 +6,16 @@ test("task header exposes import to teachers and review to assigned reviewers", 
  try {
   const teacher = await teacherContext.newPage(); const { subjects } = await (await teacher.request.get("/api/subjects")).json();
   const created = await teacher.request.post("/api/tasks", { data: { title: "E2E action hierarchy " + Date.now(), subjectId: subjects[0].id, maxPoints: 100, criteria: [{ name: "Provedení", maxPoints: 100 }] } }); expect(created.status()).toBe(201); const { task } = await created.json();
-  expect((await teacher.request.patch("/api/tasks/" + task.id, { data: { status: "PUBLISHED" } })).ok()).toBeTruthy();
   const { students } = await (await teacher.request.get("/api/submissions/bulk-upload?taskId=" + task.id)).json(); const author = students.find((item: { externalId: string }) => item.externalId === "S001");
   const imported = await teacher.request.post("/api/submissions/bulk-upload", { multipart: { taskId: task.id, stage: "FINAL", confirmed: "true", studentIds: JSON.stringify([author.id]), files: { name: "S001.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9WQAAAAASUVORK5CYII=", "base64") } } }); expect(imported.status()).toBe(200);
+  expect((await teacher.request.patch("/api/tasks/" + task.id, { data: { status: "PUBLISHED" } })).ok()).toBeTruthy();
+  await teacher.goto("/cs/evaluations");
+  await teacher.locator(`a[href="/cs/evaluations?subjectId=${subjects[0].id}"]`).click();
+  const reviewTask = teacher.getByRole("link", { name: new RegExp(task.title) });
+  await expect(reviewTask).toContainText("0 / 1 hodnocení dokončeno");
+  await reviewTask.click();
+  await expect(teacher).toHaveURL(new RegExp(`evaluations\\?taskId=${task.id}$`));
+  await expect(teacher.getByRole("link", { name: new RegExp(`^Hodnotit .*: ${task.title}$`) })).toBeVisible();
   const reviewer = await reviewerContext.newPage(); await reviewer.goto("/cs/auth/login"); await reviewer.getByLabel("E-mail", { exact: true }).fill("evaluator@desigator.cz"); await reviewer.getByLabel("Heslo", { exact: true }).fill("evaluator123"); await reviewer.getByRole("button", { name: /Přihlásit/ }).click(); await expect(reviewer).toHaveURL(/dashboard/);
   const { user } = await (await reviewer.request.get("/api/auth/session")).json(); const { task: saved } = await (await teacher.request.get("/api/tasks/" + task.id)).json();
   expect((await teacher.request.post("/api/evaluations", { data: { submissionId: saved.submissions[0].id, evaluatorId: user.id } })).status()).toBe(201);
