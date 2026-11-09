@@ -55,6 +55,20 @@ describe("object authorization", () => {
     await expect(canReadAttachment({ id: "student", role: "STUDENT" }, "attachment-1")).resolves.toBe(true);
     await expect(canManageEvaluation({ id: "evaluator", role: "EVALUATOR" }, "evaluation-1")).resolves.toBe(false);
   });
+  it("lets a teacher complete another evaluator's review within their own managed task, but not elsewhere", async () => {
+    const teacher = { id: "teacher", role: "TEACHER", organizationId: "school" };
+    dbMock.evaluation.findFirst
+      .mockResolvedValueOnce({ id: "evaluation-1" })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    await expect(canManageEvaluation(teacher, "evaluation-1")).resolves.toBe(true);
+    expect(dbMock.evaluation.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: "evaluation-1", submission: { task: { subject: { classes: { some: { class: { organizationId: "school" } } } }, creatorId: "teacher" } } },
+      select: { id: true },
+    });
+    await expect(canManageEvaluation(teacher, "evaluation-2")).resolves.toBe(false);
+    expect(dbMock.evaluation.findFirst).toHaveBeenCalledTimes(3);
+  });
   it("allows subject managers to request final work thumbnails without granting original file access", async () => {
     const teacher = { id: "teacher", role: "TEACHER", organizationId: "school" };
     await canReadAttachment(teacher, "attachment-1", true);

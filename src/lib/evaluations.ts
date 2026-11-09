@@ -30,11 +30,11 @@ export const evaluationQuerySchema = z.object({
   evaluatorId: z.string().min(1).optional(),
 });
 
-export function evaluationWhere(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>): Prisma.EvaluationWhereInput {
+export function evaluationWhere(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>, manager = false): Prisma.EvaluationWhereInput {
   const { search, status, taskId, subjectId, studentId, evaluatorId } = query;
   return { AND: [
     evaluationScope(user),
-    ...(canEvaluate(user) || canTeach(user) ? [{ evaluatorId: user.id }] : []),
+    ...(!manager && (canEvaluate(user) || canTeach(user)) ? [{ evaluatorId: user.id }] : []),
     ...(status ? [{ status }] : []),
     ...(taskId ? [{ submission: { taskId } }] : []),
     ...(subjectId ? [{ submission: { task: { subjectId } } }] : []),
@@ -55,10 +55,10 @@ export function shuffleReviewOrder<T extends { id: string }>(reviews: T[], evalu
   })).sort((a, b) => a.rank.localeCompare(b.rank)).map(({ review }) => review);
 }
 
-export async function listEvaluations(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>) {
+export async function listEvaluations(user: AuthUser, query: z.infer<typeof evaluationQuerySchema>, manager = false) {
   const { page, limit } = query;
-  const where = evaluationWhere(user, query);
-  const shuffled = canEvaluate(user) || canTeach(user)
+  const where = evaluationWhere(user, query, manager);
+  const shuffled = !manager && (canEvaluate(user) || canTeach(user))
     ? shuffleReviewOrder(await db.evaluation.findMany({ where, select: { id: true } }), user.id)
     : undefined;
   const pageIds = shuffled?.slice((page - 1) * limit, page * limit).map(item => item.id);

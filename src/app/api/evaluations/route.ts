@@ -1,6 +1,6 @@
 import { requireUnpublishedResults, PublishedResultsError } from "@/lib/result-publication";
 import { syncSubjectEvaluations } from "@/lib/subject-evaluators";
-import { managedTaskScope } from "@/lib/authorization";
+import { canManageTask, managedTaskScope } from "@/lib/authorization";
 import { rubricError } from "@/lib/task-validation";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
@@ -22,7 +22,8 @@ export async function GET(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid evaluation filters" }, { status: 400 });
   try {
     await syncSubjectEvaluations(session.user);
-    return NextResponse.json(await listEvaluations(session.user, parsed.data), { headers: { "Cache-Control": "private, no-store" } });
+    const manager = parsed.data.taskId ? await canManageTask(session.user, parsed.data.taskId) : false;
+    return NextResponse.json(await listEvaluations(session.user, parsed.data, manager), { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Failed to fetch evaluations" }, { status: 500 });
   }

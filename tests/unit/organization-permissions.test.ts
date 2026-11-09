@@ -15,6 +15,13 @@ describe("school permissions", () => {
       expect(where.AND).toContainEqual({ submission: { taskId: "task" } });
     }
   });
+  it("drops the personal restriction only when the caller manages the task being browsed", () => {
+    const teacher = { id: "teacher", role: "TEACHER", roles: ["TEACHER"] };
+    const where = evaluationWhere(teacher, evaluationQuerySchema.parse({ taskId: "task" }), true);
+    expect(where.AND).not.toContainEqual({ evaluatorId: teacher.id });
+    const unmanaged = evaluationWhere(teacher, evaluationQuerySchema.parse({ taskId: "task" }));
+    expect(unmanaged.AND).toContainEqual({ evaluatorId: teacher.id });
+  });
   it("combines independent permissions without platform administrator access", () => {
     expect(isSchoolAdmin(combined)).toBe(true); expect(isAdmin(combined)).toBe(false);
     expect(hasRole(combined, "EVALUATOR")).toBe(true);

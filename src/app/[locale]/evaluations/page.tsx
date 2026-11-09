@@ -49,9 +49,10 @@ export default async function EvaluationsPage({ params, searchParams }: {
   if ((parsed.data.taskId && !selectedTask) || (subjectId && !subject)) notFound();
   const breadcrumbs = <><nav aria-label="Drobečková navigace" className="mb-5 flex flex-wrap gap-2 text-sm text-muted-foreground"><Link href="/evaluations" className="hover:underline">Předměty</Link>{subject ? <><span>/</span><Link href={`/evaluations?subjectId=${subject.id}`} className="hover:underline">{subject.name}</Link></> : null}{selectedTask ? <><span>/</span><span className="text-foreground">{selectedTask.title}</span></> : null}</nav>{subject && canEvaluate(session.user) ? <WithdrawReviewAssignment subjectId={subject.id} evaluatorId={session.user.id} /> : null}</>;
   if (selectedTask) {
+    const managesSelectedTask = await canManageTask(session.user, selectedTask.id);
     const [result, publication] = await Promise.all([
-      listEvaluations(session.user, parsed.data),
-      canManageTask(session.user, selectedTask.id).then(allowed => allowed ? readTaskPublication(selectedTask.id) : undefined),
+      listEvaluations(session.user, parsed.data, managesSelectedTask),
+      managesSelectedTask ? readTaskPublication(selectedTask.id) : Promise.resolve(undefined),
     ]);
     return <AppShell>{breadcrumbs}<EvaluationGallery key={JSON.stringify(parsed.data)} {...JSON.parse(JSON.stringify(result))} search={parsed.data.search} status={parsed.data.status || ""} taskId={selectedTask.id} publication={publication ?? undefined} studentId={parsed.data.studentId} evaluatorId={parsed.data.evaluatorId} tasks={summaries.filter((task) => task.subject.id === subjectId).map(({ id, title }) => ({ id, title }))} anonymous={anonymousEvaluation(session.user)} showEvaluator={session.user.role !== "EVALUATOR"} /></AppShell>;
   }

@@ -67,6 +67,7 @@ export async function canViewTask(user: AuthUser, id: string): Promise<boolean> 
 }
 export async function canManageEvaluation(user: AuthUser, id: string): Promise<boolean> {
   if (isAdmin(user)) return true;
+  if (canTeach(user) && await db.evaluation.findFirst({ where: { id, submission: { task: managedTaskScope(user) } }, select: { id: true } })) return true;
   if (!canEvaluate(user)) return false;
   return Boolean(await db.evaluation.findFirst({ where: { id, evaluatorId: user.id }, select: { id: true } }));
 }
