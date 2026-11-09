@@ -67,6 +67,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error instanceof OrganizationError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message || "Neplatné údaje." }, { status: 400 });
     if ((error as { code?: string }).code === "P2002") return NextResponse.json({ error: "E-mail nebo školní ID již používá jiný účet." }, { status: 409 });
-    return NextResponse.json({ error: "Uložení uživatele selhalo." }, { status: 500 });
+    console.error("[PATCH /api/admin/users/:id]", error);
+    const detail = error instanceof Error ? `${(error as { code?: string }).code ? (error as { code?: string }).code + ": " : ""}${error.message}` : String(error);
+    return NextResponse.json({ error: "Uložení uživatele selhalo.", detail }, { status: 500 });
   }
 }
