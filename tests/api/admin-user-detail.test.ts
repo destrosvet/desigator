@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn(), scoped: vi.fn(), count: vi.fn(), update: vi.fn(), raw: vi.fn(), org: vi.fn(), subCount: vi.fn(), classCount: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: m.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("@/lib/db", () => ({ db: { $transaction: async (fn: (tx: unknown) => unknown) => fn({ $queryRaw: m.raw, user: { findUnique: m.find, findFirst: m.scoped, count: m.count, update: m.update }, organization: { findUnique: m.org }, submission: { count: m.subCount }, classStudent: { count: m.classCount } }) } }));
+vi.mock("@/lib/db", () => ({ db: { $transaction: async (fn: (tx: unknown) => unknown) => fn({ $queryRaw: m.raw, $executeRaw: m.raw, user: { findUnique: m.find, findFirst: m.scoped, count: m.count, update: m.update }, organization: { findUnique: m.org }, submission: { count: m.subCount }, classStudent: { count: m.classCount } }) } }));
 import { PATCH } from "@/app/api/admin/users/[id]/route";
 const actor = { id: "admin", role: "ADMIN", roles: ["ADMIN"], isActive: true };
 const member = { id: "member", role: "TEACHER", roles: ["TEACHER"], isActive: true, organizationId: "school" };

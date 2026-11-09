@@ -51,7 +51,7 @@ export async function PATCH(req: Request) {
     const candidate = await db.accessRequest.findUnique({ where: { id } });
     if (!candidate) return reply({ error: "Žádost nebyla nalezena." }, 404);
     await db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(194728103)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(194728103)`;
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${candidate.userId} FOR UPDATE`;
       const [actor, request, user] = await Promise.all([tx.user.findUnique({ where: { id: session.user.id } }), tx.accessRequest.findUnique({ where: { id } }), tx.user.findUnique({ where: { id: candidate.userId } })]);
       if (!actor?.isActive || !isAdmin(actor)) throw new OrganizationError("Oprávnění se změnila.", 403);

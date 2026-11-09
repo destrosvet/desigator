@@ -3,7 +3,7 @@ const m = vi.hoisted(() => ({ session: vi.fn(), user: vi.fn(), request: vi.fn(),
 vi.mock("next-auth", () => ({ getServerSession: m.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/db", () => {
-  const tx = { $queryRaw: m.raw, user: { findUnique: m.user, findUniqueOrThrow: m.user, update: m.updateUser }, accessRequest: { findUnique: m.request, findMany: m.list, count: m.count, upsert: m.upsert, update: m.updateRequest }, submission: { count: m.works }, classStudent: { count: m.memberships } };
+  const tx = { $queryRaw: m.raw, $executeRaw: m.raw, user: { findUnique: m.user, findUniqueOrThrow: m.user, update: m.updateUser }, accessRequest: { findUnique: m.request, findMany: m.list, count: m.count, upsert: m.upsert, update: m.updateRequest }, submission: { count: m.works }, classStudent: { count: m.memberships } };
   return { db: { ...tx, $transaction: (fn: (tx: unknown) => unknown) => fn(tx) } };
 });
 import { GET, POST, PATCH } from "@/app/api/access-requests/route";

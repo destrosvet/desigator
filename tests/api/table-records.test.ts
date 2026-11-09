@@ -3,7 +3,7 @@ const m = vi.hoisted(() => ({ session: vi.fn(), actor: vi.fn(), users: vi.fn(), 
 vi.mock("next-auth", () => ({ getServerSession: m.session }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/db", () => ({ db: { $transaction: async (fn: (tx: unknown) => unknown) => fn({
-  $queryRaw: m.raw,
+  $queryRaw: m.raw, $executeRaw: m.raw,
   user: { findUnique: m.actor, findMany: m.users, count: m.count, update: m.members, updateMany: m.updateUsers, deleteMany: m.deleteUsers },
   organization: { findMany: m.organizations, updateMany: m.updateOrganizations, deleteMany: m.deleteOrganizations },
   class: { findMany: m.classes, updateMany: m.updateClasses, deleteMany: m.deleteClasses },

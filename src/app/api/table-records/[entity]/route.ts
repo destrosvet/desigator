@@ -55,7 +55,7 @@ async function mutate(req: Request, params: Promise<{ entity: string }>, remove:
     }
     const result = await db.$transaction(async (tx) => {
       // One order for batch operations; child foreign keys and row locks also protect deletion.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(194728103)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(194728103)`;
       const actor = await tx.user.findUnique({ where: { id: session.user.id } });
       if (!actor?.isActive || !canTeach(actor)) throw denied();
       if (entity === "organizations") {

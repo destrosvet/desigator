@@ -29,7 +29,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     await db.$transaction(async (tx) => {
       // Serialize platform administrator edits, including concurrent deactivations.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(194728103)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(194728103)`;
       const actor = await tx.user.findUnique({ where: { id: session.user.id } });
       if (!actor?.isActive || !canTeach(actor)) throw new OrganizationError("Oprávnění se změnila.", 403);
       const user = await tx.user.findUnique({ where: { id } });
