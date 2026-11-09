@@ -28,3 +28,24 @@ export async function publicResults(shareToken: string, subjectId?: string) {
  }).sort((a,b)=>a.studentId.localeCompare(b.studentId,undefined,{numeric:true}));
  return {id:classroom.id,name:classroom.name,subjects,subject:subject??null,tasks:tasks.map(({id,title,maxPoints})=>({id,title,maxPoints})),maximum,gradingScale,rows};
 }
+export async function publicSubjectResults(shareToken: string) {
+ if(!/^[a-f0-9]{64}$/.test(shareToken)) return null;
+ const subject=await db.subject.findFirst({where:{resultsShare:{is:{token:shareToken}},isActive:true,publicResultsEnabled:true},select:{id:true,name:true,year:true,classes:{where:{class:{isActive:true}},select:{classId:true,class:{select:{name:true,organizationId:true,organization:{select:{gradingScale:true}}}}}}}});
+ if(!subject||!subject.classes.length) return null;
+ const classIds=subject.classes.map(link=>link.classId),organizationId=subject.classes[0].class.organizationId,className=subject.classes.map(link=>link.class.name).join(", ");
+ const [memberships,tasks,adjustments]=await Promise.all([
+ db.classStudent.findMany({where:{classId:{in:classIds},student:{isActive:true,organizationId,externalId:{not:null}}},select:{student:{select:{id:true,externalId:true}}}}),
+ db.task.findMany({where:{subjectId:subject.id,isTemplate:false,status:{in:["PUBLISHED","CLOSED"]}},select:{id:true,title:true,maxPoints:true,resultsPublishedAt:true,submissions:{where:{stage:"FINAL",OR:[{resultsPublishedAt:{not:null}},{task:{resultsPublishedAt:{not:null}}}]},orderBy:{version:"desc"},select:{studentId:true,evaluations:{select:{status:true,totalPoints:true,feedback:true,scores:{select:{comment:true,criterion:{select:{name:true}}}}}},attachments:{where:{mimeType:{in:publicImageTypes}},select:{id:true}}}}},orderBy:[{createdAt:"asc"},{id:"asc"}]}),
+ db.pointAdjustment.findMany({where:{subjectId:subject.id,revokedAt:null},select:{studentId:true,amountCents:true}})
+ ]);
+ const members=[...new Map(memberships.map(item=>[item.student.id,item])).values()];
+ const gradingScale=parseGradingScale(subject.classes[0].class.organization?.gradingScale);
+ const maximum=tasks.reduce((sum,t)=>sum+t.maxPoints,0);
+ const rows=members.filter(m=>m.student.externalId?.trim()).map(({student})=>{
+ const cells=tasks.map(task=>{const work=task.submissions.find(s=>s.studentId===student.id);const reviews=work ? work.evaluations.filter(review=>!task.resultsPublishedAt||review.status==="COMPLETED") : [];const points=publishedAverage(reviews,task.maxPoints);const comments=points===null?[]:reviews.flatMap(review=>[...(review.feedback?.trim()?[{text:review.feedback.trim(),criterion:null as string|null}]:[]),...(review.scores??[]).filter(score=>score.comment?.trim()).map(score=>({text:score.comment!.trim(),criterion:score.criterion.name}))]);return {pending:Boolean(task.resultsPublishedAt&&work?.evaluations.some(review=>review.status!=="COMPLETED")),comments,points:points===null?null:Math.round(points*100)/100,raw:points,images:points===null?[]:work!.attachments.map(a=>({id:a.id,url:"/api/public/results/subject/"+shareToken+"/preview/"+a.id}))};});
+ const base=Math.round(cells.reduce((sum,c)=>sum+(c.raw??0),0)*100)/100;
+ const ownAdjustments=adjustments.filter(a=>a.studentId===student.id);const total=adjustedTotal(base,ownAdjustments);
+ return {studentId:student.externalId!,cells:cells.map(({points,images,comments})=>({points,images,comments})),total,grade:finalGrade(total,maximum,gradingScale),provisional:cells.some(c=>c.points===null||c.pending)};
+ }).sort((a,b)=>a.studentId.localeCompare(b.studentId,undefined,{numeric:true}));
+ return {id:subject.id,name:subject.name,className,subjects:[] as {id:string;name:string;year:number}[],subject:{id:subject.id,name:subject.name,year:subject.year},tasks:tasks.map(({id,title,maxPoints})=>({id,title,maxPoints})),maximum,gradingScale,rows};
+}

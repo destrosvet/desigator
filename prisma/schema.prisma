@@ -180,6 +180,14 @@ model ResultsShare {
   @@map("results_shares")
 }
 
+model SubjectResultsShare {
+  subjectId String @id
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  token String @unique
+  createdAt DateTime @default(now())
+  @@map("subject_results_shares")
+}
+
 model Class {
   resultsShare ResultsShare?
   publicResultsEnabled Boolean @default(false)
@@ -230,6 +238,8 @@ model ClassStudent {
 model Subject {
   evaluators SubjectEvaluator[]
   pointAdjustments PointAdjustment[]
+  resultsShare SubjectResultsShare?
+  publicResultsEnabled Boolean @default(false)
   id          String       @id @default(cuid())
   code        String       @default("") // zkratka předmětu (např. PRG, WEB, DBS)
   name        String

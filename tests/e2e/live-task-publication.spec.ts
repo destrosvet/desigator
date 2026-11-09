@@ -38,9 +38,9 @@ test("teacher enables live task results while reviewers keep editing and complet
   await teacher.goto("/cs/evaluations?taskId=" + task.id + "&status=COMPLETED");
   const panel = teacher.locator('section[aria-label="Zveřejnění výsledků celého zadání"]');
   await expect(panel.getByTestId("task-publication-progress")).toContainText("1 z 2");
-  await panel.getByRole("button", { name: "Zapnout průběžné zveřejňování", exact: true }).click();
-  await teacher.getByRole("alertdialog").getByRole("button", { name: "Zapnout zveřejňování", exact: true }).click();
-  await expect(panel.getByText("Průběžně zveřejňováno", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Zveřejnit výsledky studentům", exact: true }).click();
+  await teacher.getByRole("alertdialog").getByRole("button", { name: "Zveřejnit výsledky", exact: true }).click();
+  await expect(panel.getByText("Zveřejněno studentům", { exact: true })).toBeVisible();
   await publicPage.bringToFront(); await publicPage.clock.runFor(30000);
   await expect(publicPage.getByRole("button", { name: /LIVE001.*Live task.*80/ })).toBeVisible();
   let data = await read();
@@ -75,8 +75,8 @@ test("teacher enables live task results while reviewers keep editing and complet
   expect((await reviewer.request.patch("/api/evaluations/" + laterId, { data: { status: "COMPLETED", scores: scores(60) } })).status()).toBe(200);
   expect((await read()).rows.find((row: { studentId: string }) => row.studentId === "LIVE002").cells[0].points).toBe(60);
   await db.submission.update({ where: { id: secondWork.id }, data: { resultsPublishedAt: new Date(), resultsPublishedById: teacherUser.id } });
-  await panel.getByRole("button", { name: "Vypnout zveřejňování výsledků", exact: true }).click();
-  await teacher.getByRole("alertdialog").getByRole("button", { name: "Vypnout zveřejňování", exact: true }).click();
+  await panel.getByRole("button", { name: "Skrýt výsledky studentům", exact: true }).click();
+  await teacher.getByRole("alertdialog").getByRole("button", { name: "Skrýt výsledky", exact: true }).click();
   await expect(panel.getByText("Nezveřejněno", { exact: true })).toBeVisible();
   await publicPage.bringToFront(); await publicPage.clock.runFor(30000);
   await expect(publicPage.getByRole("button", { name: /LIVE001.*Live task/ })).toHaveCount(0);

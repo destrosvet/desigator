@@ -1,4 +1,5 @@
 import { studentPublishedEvaluations } from "@/lib/result-publication";
+import { readTaskPublication } from "@/lib/task-result-publication";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -37,6 +38,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
 
   const classIds = task.subject.classes.map((item) => item.classId);
   const students = canManage ? await db.user.findMany({ where: { role: "STUDENT", classMemberships: { some: { classId: { in: classIds } } } }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }) : [];
+  const publication = canManage ? await readTaskPublication(id) : null;
 
   return (
     <TaskDetailClient
@@ -46,6 +48,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ loc
       task={JSON.parse(JSON.stringify({ ...task, subject: { ...task.subject, class: { name: task.subject.classes.map((item) => item.class.name).join(", ") } } }))}
       students={students}
       userId={session.user.id}
+      publicationSummary={publication}
     />
   );
 }

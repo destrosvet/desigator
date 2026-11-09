@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SubjectEvaluators, type SubjectEvaluator } from "@/components/subject-evaluators";
+import { PublicResultsControl } from "@/components/public-results-control";
 import { mutateAdminRows } from "@/lib/admin-client";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,8 @@ interface ClassOption { id: string; name: string }
 interface SubjectDetail {
   assignedEvaluators: SubjectEvaluator[];
   canManage: boolean;
+  publicResultsEnabled: boolean;
+  missingExternalIds: number;
   id: string;
   code: string;
   name: string;
@@ -125,6 +128,8 @@ export default function SubjectDetailClient({ initialSubject, classes }: { initi
         </div>
 
         <Button variant="outline" onClick={() => router.push(`/${locale}/subjects/${id}/results`)}><ClipboardList className="size-4" />Přehled výsledků a známek</Button>
+
+        {canEdit ? <PublicResultsControl scope="subject" classId={id} enabled={subject.publicResultsEnabled} missingIds={subject.missingExternalIds} locale={locale} /> : null}
 
         {canEdit ? <SubjectEvaluators subjectId={id} initialAssigned={subject.assignedEvaluators} /> : null}
         <Card>
