@@ -20,5 +20,6 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
     _count: { select: { taughtClasses: true, classMemberships: true, createdSubjects: true, createdTasks: true, submissions: true, evaluations: true } },
   } });
   if (!user) notFound();
-  return <AppShell><UserDetail user={{ ...user, roles: rolesOf(user), createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() }} self={id === session.user.id} admin={admin} /></AppShell>;
+  const organizations = admin ? await db.organization.findMany({ select: { id: true, name: true }, orderBy: [{ name: "asc" }, { id: "asc" }] }) : [];
+  return <AppShell><UserDetail user={{ ...user, roles: rolesOf(user), createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() }} self={id === session.user.id} admin={admin} organizations={organizations} /></AppShell>;
 }
